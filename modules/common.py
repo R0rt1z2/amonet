@@ -11,7 +11,7 @@ BAUD = 115200
 TIMEOUT = 5
 
 
-CRYPTO_BASE = 0x10210000 # for karnak
+CRYPTO_BASE = 0x10210000 # for suez
 
 
 def serial_ports ():
@@ -81,6 +81,9 @@ class Device:
 
     def check(self, test, gold):
         if test != gold:
+            print(test)
+            print(gold)
+            #print("ERROR: Serial protocol mismatch")
             raise RuntimeError("ERROR: Serial protocol mismatch")
 
     def check_int(self, test, gold):
