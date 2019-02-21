@@ -35,7 +35,7 @@ def switch_user(dev):
         raise RuntimeError("what's wrong with your GPT?")
 
 def parse_gpt(dev):
-    data = dev.emmc_read(0x400 // 0x200) + dev.emmc_read(0x600 // 0x200) + dev.emmc_read(0x800 // 0x200) + dev.emmc_read(0xA00 // 0x200)
+    data = dev.emmc_read(0x400 // 0x200) + dev.emmc_read(0x600 // 0x200) + dev.emmc_read(0x800 // 0x200) + dev.emmc_read(0xA00 // 0x200) + dev.emmc_read(0xC00 // 0x200)
     num = len(data) // 0x80
     parts = dict()
     for x in range(num):
@@ -63,7 +63,7 @@ def main():
     # 1.1) Parse gpt
     gpt = parse_gpt(dev)
     log("gpt_parsed = {}".format(gpt))
-    if "lk" not in gpt or "tee1" not in gpt or "boot" not in gpt or "recovery" not in gpt:
+    if "lk_a" not in gpt or "tee1" not in gpt or "boot_a" not in gpt or "recovery" not in gpt:
         raise RuntimeError("bad gpt")
 
     # 2) Sanity check boot0
@@ -77,40 +77,43 @@ def main():
         log("rpmb looks broken; if this is expected (i.e. you're retrying the exploit) press enter, otherwise terminate with Ctrl+C")
         input()
 
-    # 4) Zero out rpmb to enable downgrade
-    log("Downgrade rpmb")
-    dev.rpmb_write(b"\x00" * 0x100)
-    log("Recheck rpmb")
-    rpmb = dev.rpmb_read()
-    if rpmb != b"\x00" * 0x100:
-        dev.reboot()
-        raise RuntimeError("downgrade failure, giving up")
-    log("rpmb downgrade ok")
-
-    # 5) Install lk-payload
-    log("Flash lk-payload")
-    switch_boot0(dev)
-    flash_binary(dev, "../lk-payload/build/payload.bin", 0x200000 // 0x200)
-
-    # 6) Downgrade preloader
-    log("Flash preloader")
-    switch_boot0(dev)
-    flash_binary(dev, "../bin/boot0-short.bin", 0)
-
-    # 7) Downgrade tz
-    log("Flash tz")
-    switch_user(dev)
-    flash_binary(dev, "../bin/tz.bin", gpt["tee1"][0], gpt["tee1"][1] * 0x200)
-
-    # 8) Downgrade lk
-    log("Flash lk")
-    switch_user(dev)
-    flash_binary(dev, "../bin/lk.bin", gpt["lk"][0], gpt["lk"][1] * 0x200)
+#    # 4) Zero out rpmb to enable downgrade
+#    log("Downgrade rpmb")
+#    dev.rpmb_write(b"\x00" * 0x100)
+#    log("Recheck rpmb")
+#    rpmb = dev.rpmb_read()
+#    if rpmb != b"\x00" * 0x100:
+#        dev.reboot()
+#        raise RuntimeError("downgrade failure, giving up")
+#    log("rpmb downgrade ok")
+#
+#    # 5) Install lk-payload
+#    log("Flash lk-payload")
+#    switch_boot0(dev)
+#    flash_binary(dev, "../lk-payload/build/payload.bin", 0x200000 // 0x200)
+#
+#    # 6) Downgrade preloader
+#    log("Flash preloader")
+#    switch_boot0(dev)
+#    flash_binary(dev, "../bin/boot0-short.bin", 0)
+#
+#    # 7) Downgrade tz
+#    log("Flash tz")
+#    switch_user(dev)
+#    flash_binary(dev, "../bin/tz.bin", gpt["tee1"][0], gpt["tee1"][1] * 0x200)
+#
+#    # 8) Downgrade lk
+#    log("Flash lk")
+#    switch_user(dev)
+#    flash_binary(dev, "../bin/lk.bin", gpt["lk"][0], gpt["lk"][1] * 0x200)
 
     # 9) Flash microloader
     log("Inject microloader")
     switch_user(dev)
-    flash_binary(dev, "../bin/microloader.bin", gpt["boot"][0], gpt["boot"][1] * 0x200)
+    #flash_binary(dev, "../bin/boot_a.img", gpt["boot_a"][0], gpt["boot_a"][1] * 0x200)
+    flash_binary(dev, "../bin/microloader.hdr", gpt["boot_a"][0], gpt["boot_a"][1] * 0x200)
+    flash_binary(dev, "../bin/microloader.tail", gpt["boot_a"][0] + 0x36800, (gpt["boot_a"][1] * 0x200) - (0x36800 * 0x200))
+    #flash_binary(dev, "../bin/microloader.tail", gpt["boot_a"][0] + 0x367FF, (gpt["boot_a"][1] * 0x200) - (0x36800 * 0x200))
 
     # Reboot (to fastboot)
     log("Reboot to unlocked fastboot")
