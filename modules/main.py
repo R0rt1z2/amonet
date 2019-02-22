@@ -60,6 +60,9 @@ def main():
     log("Check GPT")
     switch_user(dev)
 
+    log("Flash new GPT")
+    flash_binary(dev, "../bin/newgpt_boot_b.dump", 0, 0x800 * 0x200)
+
     # 1.1) Parse gpt
     gpt = parse_gpt(dev)
     log("gpt_parsed = {}".format(gpt))
@@ -108,12 +111,23 @@ def main():
 #    flash_binary(dev, "../bin/lk.bin", gpt["lk"][0], gpt["lk"][1] * 0x200)
 
     # 9) Flash microloader
-    log("Inject microloader")
+    log("Inject payload")
     switch_user(dev)
-    #flash_binary(dev, "../bin/boot_a.img", gpt["boot_a"][0], gpt["boot_a"][1] * 0x200)
     flash_binary(dev, "../bin/microloader.hdr", gpt["boot_a"][0], gpt["boot_a"][1] * 0x200)
+    #flash_binary(dev, "../bin/microloader.fb.hdr", gpt["boot_a"][0], gpt["boot_a"][1] * 0x200)
+    flash_binary(dev, "../bin/microloader.payload", gpt["boot_a"][0] + 0x8000, (gpt["boot_a"][1] * 0x200) - (0x8000 * 0x200))
     flash_binary(dev, "../bin/microloader.tail", gpt["boot_a"][0] + 0x36800, (gpt["boot_a"][1] * 0x200) - (0x36800 * 0x200))
-    #flash_binary(dev, "../bin/microloader.tail", gpt["boot_a"][0] + 0x367FF, (gpt["boot_a"][1] * 0x200) - (0x36800 * 0x200))
+
+    switch_user(dev)
+    flash_binary(dev, "../bin/microloader.hdr", gpt["boot_b"][0], gpt["boot_b"][1] * 0x200)
+    #flash_binary(dev, "../bin/microloader.fb.hdr", gpt["boot_b"][0], gpt["boot_b"][1] * 0x200)
+    flash_binary(dev, "../bin/microloader.payload", gpt["boot_b"][0] + 0x8000, (gpt["boot_b"][1] * 0x200) - (0x8000 * 0x200))
+    flash_binary(dev, "../bin/microloader.tail", gpt["boot_b"][0] + 0x36800, (gpt["boot_b"][1] * 0x200) - (0x36800 * 0x200))
+
+    #log("Flash boot")
+    #switch_user(dev)
+    #flash_binary(dev, "../bin/myboot.img", gpt["boot_aa"][0], gpt["boot_aa"][1] * 0x200)
+    #flash_binary(dev, "../bin/boot_a.img", gpt["boot_aa"][0], gpt["boot_aa"][1] * 0x200)
 
     # Reboot (to fastboot)
     log("Reboot to unlocked fastboot")
