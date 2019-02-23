@@ -98,12 +98,17 @@ def main():
     hdr += struct.pack("<ii", lk_r3_target - r3_pc, lk_ptr_target - ptr_pc)
     hdr += orig2
 
-    payload_block = (inject_offset // 0x200) * 0x200
+    payload_block = (inject_offset // 0x200)
+    print("Payload Address: " + hex(shellcode_addr))
+    print("Payload Block:   " + hex(payload_block))
     if sys.argv[4]:
         with open(sys.argv[3], "wb") as fout:
             fout.write(hdr[:0x60])
+        with open(sys.argv[3] + ".fb", "wb") as fout:
+            fout.write(hdr[:0x60])
+            fout.write("FASTBOOT_PLEASE\0".encode('utf-8'))
         with open(sys.argv[4], "wb") as fout:
-            fout.write(hdr[payload_block:])
+            fout.write(hdr[payload_block * 0x200:])
     else:
         with open(sys.argv[3], "wb") as fout:
             fout.write(hdr)
