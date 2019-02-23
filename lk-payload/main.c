@@ -156,6 +156,8 @@ int main() {
         *patch = 0xE795;
     }
 
+    printf("g_boot_mode %u\n", *g_boot_mode);
+
     // device is unlocked
     patch = (void*)0x4BD1D2FC;
     *patch++ = 0x2001; // movs r0, #1
@@ -198,6 +200,10 @@ int main() {
 
     patch32 = (void*)0x4BD641F4;
     *patch32 = 1; // // force 64-bit linux kernel
+
+    // patch max-download-size to accommodate for payload
+    patch32 = (void*)0x4BD34CE0;
+    *patch32 = 0x0380F503; // ADD.W	R3, R3, #0x400000
 
     printf("Clean lk\n");
     cache_clean(lk_dst, LK_SIZE);
