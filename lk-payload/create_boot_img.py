@@ -48,7 +48,7 @@ def main():
         orig2 = fin.read(pad_len - len(orig) - 0x8)
 
     hdr = bytes.fromhex("414E44524F494421")
-    hdr += struct.pack("<II", lk_offset + ptr_offset, forced_addr)
+    hdr += struct.pack("<II", lk_offset + ptr_offset + 0x8, forced_addr)
     hdr += bytes.fromhex("0000000000000044000000000000F0400000004840000000000000002311040E00000000000000000000000000000000")
     hdr += b"bootopt=64S3,32N2,32N2" # This is so that TZ still inits, but LK thinks kernel is 32-bit - need to fix too!
     hdr += b"\x00" * 0xA
