@@ -74,7 +74,7 @@ static void parse_gpt() {
             printf("found lk_b at 0x%08X\n", start);
             g_lk_b = start;
         } else if (memcmp(name, "m\x00i\x00s\x00\x63\x00\x00\x00", 10) == 0) {
-            printf("found lk_b at 0x%08X\n", start);
+            printf("found misc at 0x%08X\n", start);
             g_misc = start;
         }
     }
@@ -118,12 +118,10 @@ int main() {
       // Read amonet-flag from MISC partition
       //dev->read(dev, g_misc * 0x200 + 0x4000, bootloader_msg, 0x10, USER_PART);
       dev->read(dev, g_misc * 0x200, bootloader_msg, 0x10, USER_PART);
-      //video_printf("%s\n", bootloader_msg);
     }
 
-    //uint8_t tmp[0x10] = { 0 };
-    //dev->read(dev, g_boot_aa * 0x200, tmp, 0x10, USER_PART);
     uint8_t *tmp = (void*)0x45000020;
+
     if (strncmp(tmp, "FASTBOOT_PLEASE", 15) == 0) {
         fastboot = 1;
     }

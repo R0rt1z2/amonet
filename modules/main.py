@@ -113,16 +113,14 @@ def main():
     # 9) Flash microloader
     log("Inject payload")
     switch_user(dev)
-    flash_binary(dev, "../bin/microloader.hdr", gpt["boot_a"][0], gpt["boot_a"][1] * 0x200)
-    #flash_binary(dev, "../bin/microloader.fb.hdr", gpt["boot_a"][0], gpt["boot_a"][1] * 0x200)
-    flash_binary(dev, "../bin/microloader.payload", gpt["boot_a"][0] + 0x8000, (gpt["boot_a"][1] * 0x200) - (0x8000 * 0x200))
-    flash_binary(dev, "../bin/microloader.tail", gpt["boot_a"][0] + 0x36800, (gpt["boot_a"][1] * 0x200) - (0x36800 * 0x200))
+    flash_binary(dev, "../bin/boot.hdr", gpt["boot_a"][0], gpt["boot_a"][1] * 0x200)
+    #flash_binary(dev, "../bin/boot.hdr.fb", gpt["boot_a"][0], gpt["boot_a"][1] * 0x200)
+    flash_binary(dev, "../bin/boot.payload", gpt["boot_a"][0] + 0x367F7, (gpt["boot_a"][1] * 0x200) - (0x367F7 * 0x200))
 
     switch_user(dev)
-    flash_binary(dev, "../bin/microloader.hdr", gpt["boot_b"][0], gpt["boot_b"][1] * 0x200)
-    #flash_binary(dev, "../bin/microloader.fb.hdr", gpt["boot_b"][0], gpt["boot_b"][1] * 0x200)
-    flash_binary(dev, "../bin/microloader.payload", gpt["boot_b"][0] + 0x8000, (gpt["boot_b"][1] * 0x200) - (0x8000 * 0x200))
-    flash_binary(dev, "../bin/microloader.tail", gpt["boot_b"][0] + 0x36800, (gpt["boot_b"][1] * 0x200) - (0x36800 * 0x200))
+    flash_binary(dev, "../bin/boot.hdr", gpt["boot_b"][0], gpt["boot_b"][1] * 0x200)
+    #flash_binary(dev, "../bin/boot.hdr.fb", gpt["boot_b"][0], gpt["boot_b"][1] * 0x200)
+    flash_binary(dev, "../bin/boot.payload", gpt["boot_b"][0] + 0x367F7, (gpt["boot_b"][1] * 0x200) - (0x367F7 * 0x200))
 
     #log("Flash boot")
     #switch_user(dev)
