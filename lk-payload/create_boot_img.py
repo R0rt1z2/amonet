@@ -41,7 +41,16 @@ lk_ptr_target = inject_addr + 0x14
 
 
 def main():
-    with open(sys.argv[1], "rb") as fin:
+    if len(sys.argv) < 2:
+        args = ["", "../bin/lk.bin", "build/payload.bin", "../bin/boot.hdr", "../bin/boot.payload" ]
+    elif len(sys.argv) < 3:
+        args = ["", "../bin/lk.bin", "build/payload.bin", sys.argv[1] ]
+    elif len(sys.argv) < 4:
+        args = ["", "../bin/lk.bin", "build/payload.bin", sys.argv[1], sys.argv[2] ]
+    else:
+        args = sys.argv
+
+    with open(args[1], "rb") as fin:
         orig = fin.read(ptr_offset + 0x200)
         fin.seek(ptr_offset + 0x200 + 0x8)
         pad_len = ((len(orig) // 0x200) + 1) * 0x200
@@ -84,7 +93,7 @@ def main():
     want_len = shellcode_addr - inject_addr + 0x40 + 0x10
     hdr += b"\x00" * ((want_len + inject_offset) - len(hdr))
 
-    with open(sys.argv[2], "rb") as fin:
+    with open(args[2], "rb") as fin:
         shellcode = fin.read()
 
     if len(shellcode) > shellcode_sz:
@@ -100,17 +109,22 @@ def main():
 
     payload_block = (inject_offset // 0x200)
     print("Payload Address: " + hex(shellcode_addr))
-    print("Payload Block:   " + hex(payload_block))
-    if len(sys.argv) > 4:
-        with open(sys.argv[3], "wb") as fout:
+    print("Payload Block:   " + str(payload_block))
+    print("Part Size:       %d ( %.2f MiB / %d Blocks)" % (len(hdr), len(hdr)/1024/1024, (len(hdr)//0x200) + 1))
+    if len(args) > 4:
+        print("Writing " + args[3] + "...")
+        with open(args[3], "wb") as fout:
             fout.write(hdr[:0x60])
-        with open(sys.argv[3] + ".fb", "wb") as fout:
+        print("Writing " + args[3] + ".fb...")
+        with open(args[3] + ".fb", "wb") as fout:
             fout.write(hdr[:0x60])
             fout.write("FASTBOOT_PLEASE\0".encode('utf-8'))
-        with open(sys.argv[4], "wb") as fout:
+        print("Writing " + args[4] + "...")
+        with open(args[4], "wb") as fout:
             fout.write(hdr[payload_block * 0x200:])
     else:
-        with open(sys.argv[3], "wb") as fout:
+        print("Writing " + args[3] + "...")
+        with open(args[3], "wb") as fout:
             fout.write(hdr)
 
 
