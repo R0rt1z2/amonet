@@ -27,6 +27,20 @@ def flash_binary(dev, path, start_block, max_size=0):
         dev.emmc_write(start_block + x, data[x * 0x200:(x + 1) * 0x200])
     print("")
 
+def dump_binary(dev, path, start_block, max_size=0):
+    with open(path, "w+b") as fout:
+        blocks = max_size // 0x200
+        for x in range(blocks):
+            print("[{} / {}]".format(x + 1, blocks), end='\r')
+            fout.write(dev.emmc_read(start_block + x))
+    print("")
+
+def force_fastboot(dev, gpt):
+    switch_user(dev)
+    block = list(dev.emmc_read(gpt["misc"][0]))
+    block[0:12] = "boot-amonet\x00".encode("utf-8")
+    dev.emmc_write(gpt["misc"][0], bytes(block))
+
 def switch_user(dev):
     dev.emmc_switch(0)
     block = dev.emmc_read(0)
@@ -60,14 +74,17 @@ def main():
     log("Check GPT")
     switch_user(dev)
 
-    log("Flash new GPT")
-    flash_binary(dev, "../bin/newgpt_boot_b.dump", 0, 0x800 * 0x200)
-
     # 1.1) Parse gpt
     gpt = parse_gpt(dev)
     log("gpt_parsed = {}".format(gpt))
     if "lk_a" not in gpt or "tee1" not in gpt or "boot_a" not in gpt or "recovery" not in gpt:
         raise RuntimeError("bad gpt")
+
+    if "boot_aa" not in gpt or "boot_bb" not in gpt:
+        log("Flash new GPT")
+        flash_binary(dev, "../bin/newgpt_boot_b.dump", 0, 0x800 * 0x200)
+        gpt = parse_gpt(dev)
+        log("gpt_parsed = {}".format(gpt))
 
     # 2) Sanity check boot0
     log("Check boot0")
@@ -121,6 +138,8 @@ def main():
     flash_binary(dev, "../bin/boot.hdr", gpt["boot_b"][0], gpt["boot_b"][1] * 0x200)
     #flash_binary(dev, "../bin/boot.hdr.fb", gpt["boot_b"][0], gpt["boot_b"][1] * 0x200)
     flash_binary(dev, "../bin/boot.payload", gpt["boot_b"][0] + 0x367F7, (gpt["boot_b"][1] * 0x200) - (0x367F7 * 0x200))
+
+    force_fastboot(dev, gpt)
 
     #log("Flash boot")
     #switch_user(dev)
