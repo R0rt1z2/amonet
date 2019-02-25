@@ -101,7 +101,7 @@ def main():
     payload_block = (inject_offset // 0x200)
     print("Payload Address: " + hex(shellcode_addr))
     print("Payload Block:   " + hex(payload_block))
-    if sys.argv[4]:
+    if len(sys.argv) > 4:
         with open(sys.argv[3], "wb") as fout:
             fout.write(hdr[:0x60])
         with open(sys.argv[3] + ".fb", "wb") as fout:
