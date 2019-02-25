@@ -25,7 +25,8 @@ void _putchar(char character)
 
 int (*original_read)(struct device_t *dev, uint64_t block_off, void *dst, size_t sz, int part) = (void*)0x4BD2AE2D;
 
-uint64_t g_boot_a, g_boot_aa, g_boot_b, g_boot_bb, g_lk_a, g_lk_b, g_misc;
+uint64_t g_boot_a, g_boot_aa, g_boot_b, g_boot_bb, g_lk_a, g_lk_b, g_misc, g_recovery;
+uint8_t boot_recovery = 0;
 
 int read_func(struct device_t *dev, uint64_t block_off, void *dst, size_t sz, int part) {
     printf("read_func hook\n");
@@ -33,17 +34,35 @@ int read_func(struct device_t *dev, uint64_t block_off, void *dst, size_t sz, in
     //printf("block_off 0x%08X 0x%08X\n", block_off, *(&(block_off)+4));
     int ret = 0;
     if(block_off == g_boot_a * 0x200) {
-      ret = original_read(dev, g_boot_aa * 0x200, dst, sz, part);
+      if(boot_recovery) {
+        block_off = g_recovery * 0x200;
+      }
+      else {
+        block_off = g_boot_aa * 0x200;
+      }
     } else if(block_off == (g_boot_a * 0x200) + 0x800) {
-      ret = original_read(dev, (g_boot_aa * 0x200) + 0x800, dst, sz, part);
+      if(boot_recovery) {
+         block_off = (g_recovery * 0x200) + 0x800;
+      }
+      else {
+        block_off = (g_boot_aa * 0x200) + 0x800;
+      }
     } else if(block_off == g_boot_b * 0x200) {
-      ret = original_read(dev, g_boot_bb * 0x200, dst, sz, part);
+      if(boot_recovery) {
+        block_off = g_recovery * 0x200;
+      }
+      else {
+        block_off = g_boot_bb * 0x200;
+      }
     } else if(block_off == (g_boot_b * 0x200) + 0x800) {
-      ret = original_read(dev, (g_boot_bb * 0x200) + 0x800, dst, sz, part);
-    } else {
-      ret = original_read(dev, block_off, dst, sz, part);
+      if(boot_recovery) {
+        block_off = (g_recovery * 0x200) + 0x800;
+      }
+      else {
+        block_off = (g_boot_bb * 0x200) + 0x800;
+      }
     }
-    return ret;
+    return original_read(dev, block_off, dst, sz, part);
 }
 
 static void parse_gpt() {
@@ -76,6 +95,9 @@ static void parse_gpt() {
         } else if (memcmp(name, "m\x00i\x00s\x00\x63\x00\x00\x00", 10) == 0) {
             printf("found misc at 0x%08X\n", start);
             g_misc = start;
+        } else if (memcmp(name, "r\x00\x65\x00\x63\x00o\x00v\x00\x65\x00r\x00y\x00\x00\x00", 18) == 0) {
+            printf("found recovery at 0x%08X\n", start);
+            g_recovery = start;
         }
     }
 }
@@ -139,6 +161,14 @@ int main() {
         fastboot = 1;
     }
 
+    // Recovery Mode (Used as factory-reset on Echo)
+    else if(*g_boot_mode == 2){
+        fastboot = 1;
+        if(g_recovery) {
+          boot_recovery = 1;
+        }
+    }
+
 #ifdef RELOAD_LK
       printf("Disable interrupts\n");
       asm volatile ("cpsid if");
@@ -184,17 +214,15 @@ int main() {
 
     uint32_t *patch32;
 
-    if(!fastboot) {
-      // hook bootimg read function
+    // hook bootimg read function
 
-      original_read = (void*)dev->read;
+    original_read = (void*)dev->read;
 
-      patch32 = (void*)0x4BD57670;
-      *patch32 = (uint32_t)read_func;
+    patch32 = (void*)0x4BD57670;
+    *patch32 = (uint32_t)read_func;
 
-      patch32 = (void*)&dev->read;
-      *patch32 = (uint32_t)read_func;
-    }
+    patch32 = (void*)&dev->read;
+    *patch32 = (uint32_t)read_func;
 
     patch32 = (void*)0x4BD641F4;
     *patch32 = 1; // // force 64-bit linux kernel
