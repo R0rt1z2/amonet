@@ -24,6 +24,7 @@ void _putchar(char character)
 }
 
 int (*original_read)(struct device_t *dev, uint64_t block_off, void *dst, size_t sz, int part) = (void*)0x4BD2AE2D;
+int (*app)() = (void*)0x4BD341D5;
 
 uint64_t g_boot_a, g_boot_aa, g_boot_b, g_boot_bb, g_lk_a, g_lk_b, g_misc, g_recovery;
 uint8_t boot_recovery = 0;
@@ -105,7 +106,7 @@ static void parse_gpt() {
 int main() {
     int ret = 0;
     printf("This is LK-payload by xyz. Copyright 2019\n");
-    printf("Ported to Echo 2 by k4y0z. Copyright 2019\n");
+    printf("64-Bit version for biscuit by k4y0z. Copyright 2019\n");
 
     int fastboot = 0;
 
@@ -116,8 +117,6 @@ int main() {
         printf("falling back to fastboot mode\n");
         fastboot = 1;
     }
-
-    int (*app)() = (void*)0x4BD341D5;
 
     unsigned char overwritten[] = {
         0x6C, 0xBC, 0x05, 0x00, 0x60, 0xBC, 0x05, 0x00, 0x2D, 0xE9, 0xF8, 0x43, 0x5D, 0x48, 0x5E, 0x4D,
@@ -138,11 +137,24 @@ int main() {
 
     if(g_misc) {
       // Read amonet-flag from MISC partition
-      //dev->read(dev, g_misc * 0x200 + 0x4000, bootloader_msg, 0x10, USER_PART);
       dev->read(dev, g_misc * 0x200, bootloader_msg, 0x10, USER_PART);
+      //dev->read(dev, g_misc * 0x200 + 0x4000, bootloader_msg, 0x10, USER_PART);
+      //printf("bootloader_msg: %s\n", bootloader_msg);
     }
 
     uint8_t *tmp = (void*)0x45000020;
+
+/*
+    uint32_t* boot_reason = (uint32_t*)((*(uint32_t*)0x4BD664E0) + 256);
+    char* bootreason = (char*)(16 * *boot_reason + 0x4BD55FFC);
+    uint32_t* usb_config = (uint32_t*)((*(uint32_t*)0x4BD664E0) + 264);
+
+    printf("boot_reason %u\n", *boot_reason);
+    printf("bootreason %s\n", bootreason);
+    for(int i = 0; i < 12; ++i) {
+      printf("bootreason (%u) %s\n", i, (char*)(16 * i + 0x4BD55FFC));
+    }
+*/
 
     if (strncmp(tmp, "FASTBOOT_PLEASE", 15) == 0) {
         fastboot = 1;
@@ -161,11 +173,13 @@ int main() {
         fastboot = 1;
     }
 
-    // Recovery Mode (Used as factory-reset on Echo)
+    // Use seperate recovery partition
     else if(*g_boot_mode == 2){
-        fastboot = 1;
+        //fastboot = 1;
         if(g_recovery) {
           boot_recovery = 1;
+          //If we don't set boot_mode to 0, USB is disabled.
+          *g_boot_mode = 0;
         }
     }
 
@@ -185,7 +199,6 @@ int main() {
     }
 
     printf("g_boot_mode %u\n", *g_boot_mode);
-
     // device is unlocked
     patch = (void*)0x4BD1D2FC;
     *patch++ = 0x2001; // movs r0, #1

