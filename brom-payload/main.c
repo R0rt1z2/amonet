@@ -94,11 +94,11 @@ int main() {
     struct msdc_host host = { 0 };
     host.ocr_avail = MSDC_OCR_AVAIL;
 
-    mmc_init(&host);
-
     printf("Entering command loop\n");
 
     send_dword(0xB1B2B3B4);
+
+    mmc_init(&host);
 
     while (1) {
         memset(buf, 0, sizeof(buf));
