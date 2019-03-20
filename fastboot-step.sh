@@ -2,11 +2,13 @@
 
 set -e
 
-fastboot flash boot bin/recovery-inj.img
-fastboot flash recovery bin/recovery-inj.img
-fastboot reboot recovery
+fastboot flash recovery_x bin/twrp.img
+fastboot erase userdata
+#fastboot format userdata
+fastboot oem reboot-recovery
 
 echo ""
 echo ""
-echo "If you don't see the recovery in a few seconds, try pressing the power button twice"
+echo "Your device should now restart into TWRP"
+echo "You should first do a factory-reset (otherwise it should happen automatically when you reboot)"
 echo ""
