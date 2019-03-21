@@ -212,56 +212,101 @@ def modify_step2(part_list):
 
     return part_list_n
 
+def unpatch(gpt_header, part_list):
+    part_list_n = part_list.copy()
+    part_n = len(part_list) - 1
+    partition = part_list_n[len(part_list_n) - 3]
+
+    assert partition['name'].decode("utf-16le").rstrip("\x00") == "userdata", "userdata is not where it is expected, refusing to unpatch"
+
+    partition['end'] =  gpt_header["last_lba"]
+    part_list_n[len(part_list_n) - 2]  = {'type_guid':b"\x00", 'guid':b'\x00', 'start':0, 'end':0, 'attrib':0, 'name':b'\x00'}
+    part_list_n[len(part_list_n) - 1]  = {'type_guid':b"\x00", 'guid':b'\x00', 'start':0, 'end':0, 'attrib':0, 'name':b'\x00'}
+
+    partition = get_part_by_name(part_list_n, "boot_x")
+    partition["name"] = "boot".encode("utf-16le") + b"\x00\x00"
+
+    partition = get_part_by_name(part_list_n, "recovery_x")
+    partition["name"] = "recovery".encode("utf-16le") + b"\x00\x00"
+    return part_list_n
+
 def main():
     
-    if len(sys.argv) != 2:
-        usage(sys.argv)
+    if len(sys.argv) == 2:
+        cmd = "print"
+        in_file = sys.argv[1]
+    elif len(sys.argv) == 3:
+        cmd = sys.argv[1]
+        in_file = sys.argv[2]
+    else:
+        print("Usage: " + sys.argv[0]  + " [ print | patch | unpatch ] <filename>")
         sys.exit()
     
-    f = open(sys.argv[1], 'rb')
+    f = open(in_file, 'rb')
 
-    log("Original GPT:")
+    log("Input GPT:")
     
     gpt_header, part_list = parse_gpt(f)
 
-    log("Generate original backup GPT from primary")
+    log("Regenerate primary and backup GPT from input")
     primary, backup = generate_gpt(gpt_header, part_list)
 
-    part_list_mod1 = modify_step1(part_list)
-    primary_step1, backup_step1 = generate_gpt(gpt_header, part_list_mod1)
+    log("Writing regenerated GPT to " + in_file + ".gpt") 
+    with open(in_file + '.gpt', 'wb') as fout:
+        fout.write(primary)
 
-    log('')
-    log("Modified GPT Step 1:")
-    gpt_header, part_list = parse_gpt(bytes(primary_step1))
-
-    part_list_mod2 = modify_step2(part_list_mod1)
-    primary_step2, backup_step2 = generate_gpt(gpt_header, part_list_mod2)
-
-    log('')
-    log("Modified GPT Step 2:")
-    gpt_header, part_list = parse_gpt(bytes(primary_step2))
-
-    log("Writing backup GPT (original) to " + sys.argv[1] + ".bak") 
-    with open(sys.argv[1] + '.bak', 'wb') as fout:
+    log("Writing regenerated backup GPT to " + in_file + ".bak") 
+    with open(in_file + '.bak', 'wb') as fout:
         fout.write(backup)
 
-    log("Writing primary GPT (part 1) to " + sys.argv[1] + ".step1.gpt") 
-    with open(sys.argv[1] + '.step1.gpt', 'wb') as fout:
-        fout.write(primary_step1)
-    log("Writing backup GPT (part 1) to " + sys.argv[1] + ".step1.bak") 
-    with open(sys.argv[1] + '.step1.bak', 'wb') as fout:
-        fout.write(backup_step1)
-
-    log("Writing primary GPT (part 2) to " + sys.argv[1] + ".step2.gpt") 
-    with open(sys.argv[1] + '.step2.gpt', 'wb') as fout:
-        fout.write(primary_step2)
-    log("Writing backup GPT (part 2) to " + sys.argv[1] + ".step2.bak") 
-    with open(sys.argv[1] + '.step2.bak', 'wb') as fout:
-        fout.write(backup_step2)
-
-    log("Writing backup GPT offset to " + sys.argv[1] + ".offset") 
-    with open(sys.argv[1] + '.offset', 'w') as fout:
+    log("Writing backup GPT offset to " + in_file + ".offset") 
+    with open(in_file + '.offset', 'w') as fout:
         fout.write("{}\n".format(gpt_header['last_lba'] + 1))
+
+    if cmd == "patch":
+
+        part_list_mod1 = modify_step1(part_list)
+        primary_step1, backup_step1 = generate_gpt(gpt_header, part_list_mod1)
+
+        log('')
+        log("Modified GPT Step 1:")
+        gpt_header, part_list = parse_gpt(bytes(primary_step1))
+
+        log("Writing primary GPT (part 1) to " + in_file + ".step1.gpt") 
+        with open(in_file + '.step1.gpt', 'wb') as fout:
+            fout.write(primary_step1)
+        log("Writing backup GPT (part 1) to " + in_file + ".step1.bak") 
+        with open(in_file + '.step1.bak', 'wb') as fout:
+            fout.write(backup_step1)
+
+        part_list_mod2 = modify_step2(part_list_mod1)
+        primary_step2, backup_step2 = generate_gpt(gpt_header, part_list_mod2)
+
+        log('')
+        log("Modified GPT Step 2:")
+        gpt_header, part_list = parse_gpt(bytes(primary_step2))
+
+        log("Writing primary GPT (part 2) to " + in_file + ".step2.gpt") 
+        with open(in_file + '.step2.gpt', 'wb') as fout:
+            fout.write(primary_step2)
+        log("Writing backup GPT (part 2) to " + in_file + ".step2.bak") 
+        with open(in_file + '.step2.bak', 'wb') as fout:
+            fout.write(backup_step2)
+
+    elif cmd == "unpatch":
+        part_list_unpatched = unpatch(gpt_header, part_list)
+        primary_unpatched, backup_unpatched = generate_gpt(gpt_header, part_list_unpatched)
+
+        log('')
+        log("Unpatched GPT:")
+        gpt_header, part_list = parse_gpt(bytes(primary_unpatched))
+
+        log("Writing primary GPT (unpatched) to " + in_file + ".unpatched.gpt") 
+        with open(in_file + '.unpatched.gpt', 'wb') as fout:
+            fout.write(primary_unpatched)
+        log("Writing backup GPT (unpatched) to " + in_file + ".unpatched.bak") 
+        with open(in_file + '.unpatched.bak', 'wb') as fout:
+            fout.write(backup_unpatched)
 
     f.close()
     
