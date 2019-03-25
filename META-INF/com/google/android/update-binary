@@ -2,7 +2,7 @@
 # amonet updater
 # Copyright (C) 2019 k4y0z @ xda-developers
 
-PAYLOAD_BLOCK=1024
+PAYLOAD_BLOCK=223223
 
 # detect whether in boot mode
 getprop | grep zygote | grep -q running && bootMode=true || bootMode=false
@@ -35,6 +35,15 @@ grep_prop() {
   sed -n "$REGEX" $FILES 2>/dev/null | head -n 1
 }
 
+check_product() {
+  product=$(grep_prop ro.product.device)
+
+  if [ "$product" != "${1}" ] ; then
+    ui_print "This is only for the \"${1}\"${2}, your device is a \"${product}\""
+    exit 1
+  fi
+}
+
 ##########################################################################################
 # Flashable update-binary preparation
 ##########################################################################################
@@ -61,12 +70,7 @@ if [ "$?" -eq "0" ]; then
   done
 fi
 
-PRODUCT=$(getprop ro.build.product)
-if [ "$PRODUCT" != "tank" ]; then
-  ui_print " "
-  ui_print "This is for the tank (Fire TV Stick 2), your device is a ${PRODUCT}"
-  exit 1
-fi
+check_product "suez" " - Amazon Fire HD 10 (2017) - "
 
 TMPDIR=/dev/tmp
 INSTALLER=$TMPDIR/install
@@ -75,7 +79,7 @@ INSTALLER=$TMPDIR/install
 rm -rf $TMPDIR 2>/dev/null
 mkdir -p $INSTALLER 2>/dev/null
 
-unzip -o "$ZIP" 'amonet/bin/twrp.img' 'amonet/lk-payload/build/payload.bin' -d $INSTALLER >&2
+unzip -o "$ZIP" 'amonet/bin/twrp.img' 'amonet/bin/boot.hdr' 'amonet/bin/boot.payload' -d $INSTALLER >&2
 
 ##########################################################################################
 # Main
@@ -84,11 +88,12 @@ unzip -o "$ZIP" 'amonet/bin/twrp.img' 'amonet/lk-payload/build/payload.bin' -d $
 ui_print " "
 ui_print "amonet updater"
 ui_print "- updating TWRP"
-dd if=${INSTALLER}/amonet/bin/twrp.img of=/dev/block/platform/mtk-msdc.0/by-name/recovery_x
+dd if=${INSTALLER}/amonet/bin/twrp.img of=/dev/block/platform/soc/by-name/recovery_x
 ui_print "- updating payload"
-echo 0 > /sys/block/mmcblk0boot0/force_ro
-dd if=/${INSTALLER}/amonet/lk-payload/bin/payload.bin of=/dev/block/mmcblk0boot0 bs=512 seek=${PAYLOAD_BLOCK}
-echo 1 > /sys/block/mmcblk0boot0/force_ro
+dd if=${INSTALLER}/amonet/bin/boot.hdr of=/dev/block/platform/soc/by-name/boot_amonet bs=512 
+dd if=${INSTALLER}/amonet/bin/boot.payload of=/dev/block/platform/soc/by-name/boot_amonet bs=512 seek=${PAYLOAD_BLOCK} 
+dd if=${INSTALLER}/amonet/bin/boot.hdr of=/dev/block/platform/soc/by-name/recovery_amonet bs=512 
+dd if=${INSTALLER}/amonet/bin/boot.payload of=/dev/block/platform/soc/by-name/recovery_amonet bs=512 seek=${PAYLOAD_BLOCK} 
 ui_print "- Update complete"
 ui_print " "
 
