@@ -10,12 +10,7 @@ max_tee=263
 max_lk=2
 max_pl=5
 
-product=$(adb shell getprop ro.product.name | dos2unix)
-
-if [ "$product" != "suez" ] ; then
-  echo "This is only for the \"suez\" (Amazon Fire HD10 (2017)), your device is a \"${product}\""
-  exit 1
-fi
+check_device "suez" " - Amazon Fire HD 10 (2017) - "
 
 get_root
 

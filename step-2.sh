@@ -8,6 +8,8 @@ set -e
 
 adb wait-for-device
 
+check_device "suez" " - Amazon Fire HD 10 (2017) - "
+
 get_root
 
 set +e
