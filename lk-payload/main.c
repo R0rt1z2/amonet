@@ -103,7 +103,17 @@ int main() {
 
     struct device_t *dev = get_device();
 
-    if(g_misc) {
+    // factory and factory advanced boot
+    if(*g_boot_mode == 4 ) {
+      fastboot = 1;
+    }
+
+    // use advanced factory mode to boot recovery
+    else if(*g_boot_mode == 6) {
+      *g_boot_mode = 2;
+    }
+
+    else if(g_misc) {
       // Read amonet-flag from MISC partition
       dev->read(dev, g_misc * 0x200, bootloader_msg, 0x10, USER_PART);
       //dev->read(dev, g_misc * 0x200 + 0x4000, bootloader_msg, 0x10, USER_PART);
@@ -128,11 +138,6 @@ int main() {
           fastboot = 1;
         }
       }
-    }
-
-    // factory and factory advanced boot
-    else if(*g_boot_mode == 4 || *g_boot_mode == 6){
-        fastboot = 1;
     }
 
 #ifdef RELOAD_LK
