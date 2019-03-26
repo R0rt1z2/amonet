@@ -113,8 +113,11 @@ def parse_part_table(part_table, gpt_header):
 
 def get_part_by_name(part_list, name):
     for part in part_list:
-        if part['name'].decode("utf-16le").rstrip("\x00") == name:
-            return part
+        try:
+            if part['name'].decode("utf-16le").rstrip("\x00") == name:
+                return part
+        except:
+            continue
     return None
 
 
@@ -199,16 +202,20 @@ def modify_step2(part_list):
 
     part_list_n = part_list.copy()
     partition = get_part_by_name(part_list_n, "boot")
-    partition["name"] = "boot_x".encode("utf-16le") + b"\x00\x00"
+    if partition:
+        partition["name"] = "boot_x".encode("utf-16le") + b"\x00\x00"
 
     partition = get_part_by_name(part_list_n, "recovery")
-    partition["name"] = "recovery_x".encode("utf-16le") + b"\x00\x00"
+    if partition:
+        partition["name"] = "recovery_x".encode("utf-16le") + b"\x00\x00"
 
     partition = get_part_by_name(part_list_n, "boot_tmp")
-    partition["name"] = "boot".encode("utf-16le") + b"\x00\x00"
+    if partition:
+        partition["name"] = "boot".encode("utf-16le") + b"\x00\x00"
 
     partition = get_part_by_name(part_list_n, "recovery_tmp")
-    partition["name"] = "recovery".encode("utf-16le") + b"\x00\x00"
+    if partition:
+        partition["name"] = "recovery".encode("utf-16le") + b"\x00\x00"
 
     return part_list_n
 
@@ -224,10 +231,12 @@ def unpatch(gpt_header, part_list):
     part_list_n[len(part_list_n) - 1]  = {'type_guid':b"\x00", 'guid':b'\x00', 'start':0, 'end':0, 'attrib':0, 'name':b'\x00'}
 
     partition = get_part_by_name(part_list_n, "boot_x")
-    partition["name"] = "boot".encode("utf-16le") + b"\x00\x00"
+    if partition:
+        partition["name"] = "boot".encode("utf-16le") + b"\x00\x00"
 
     partition = get_part_by_name(part_list_n, "recovery_x")
-    partition["name"] = "recovery".encode("utf-16le") + b"\x00\x00"
+    if partition:
+        partition["name"] = "recovery".encode("utf-16le") + b"\x00\x00"
     return part_list_n
 
 def main():
