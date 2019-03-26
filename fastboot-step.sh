@@ -13,6 +13,5 @@ fastboot oem reboot-recovery
 
 echo ""
 echo ""
-echo "Your device should now restart into TWRP"
-echo "You should first do a factory-reset (otherwise it should happen automatically when you reboot)"
+echo "Your device should now reboot into TWRP"
 echo ""
