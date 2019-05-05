@@ -52,7 +52,7 @@ cp gpt-regen/gpt.bin.offset gpt/gpt.bin.offset
 echo ""
 
 echo "Flashing Amazon Recovery"
-adb push bin/twrp.img /data/local/tmp/
+adb push bin/recovery.img /data/local/tmp/
 adb shell su -c \"dd if=/data/local/tmp/recovery.img of=/dev/block/platform/soc/by-name/recovery${suffix_b} bs=512\" 
 echo ""
 
