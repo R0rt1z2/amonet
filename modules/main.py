@@ -28,6 +28,7 @@ def switch_boot0(dev):
     if block[0:9] != b"EMMC_BOOT" and block != b"\x00" * 0x200:
         dev.reboot()
         raise RuntimeError("what's wrong with your BOOT0?")
+    dev.kick_watchdog()
 
 def flash_data(dev, data, start_block, max_size=0):
     while len(data) % 0x200 != 0:
@@ -40,6 +41,8 @@ def flash_data(dev, data, start_block, max_size=0):
     for x in range(blocks):
         print("[{} / {}]".format(x + 1, blocks), end='\r')
         dev.emmc_write(start_block + x, data[x * 0x200:(x + 1) * 0x200])
+        if x % 10 == 0:
+            dev.kick_watchdog()
     print("")
 
 def flash_binary(dev, path, start_block, max_size=0):
@@ -56,6 +59,8 @@ def dump_binary(dev, path, start_block, max_size=0):
         for x in range(blocks):
             print("[{} / {}]".format(x + 1, blocks), end='\r')
             fout.write(dev.emmc_read(start_block + x))
+        if x % 10 == 0:
+            dev.kick_watchdog()
     print("")
 
 def force_fastboot(dev, gpt):
@@ -71,6 +76,7 @@ def switch_user(dev):
     if block[510:512] != b"\x55\xAA":
         dev.reboot()
         raise RuntimeError("what's wrong with your GPT?")
+    dev.kick_watchdog()
 
 def parse_gpt(dev):
     data = dev.emmc_read(0x400 // 0x200) + dev.emmc_read(0x600 // 0x200) + dev.emmc_read(0x800 // 0x200) + dev.emmc_read(0xA00 // 0x200) + dev.emmc_read(0xC00 // 0x200)
@@ -99,6 +105,7 @@ def main():
 
     # 0.2) Load brom payload
     load_payload(dev, "../brom-payload/build/payload.bin")
+    dev.kick_watchdog()
 
     if len(sys.argv) == 2 and sys.argv[1] == "minimal":
         log("Running in minimal mode, assuming LK and TZ to have already been flashed.")
@@ -167,6 +174,7 @@ def main():
         dev.reboot()
         raise RuntimeError("downgrade failure, giving up")
     log("rpmb downgrade ok")
+    dev.kick_watchdog()
 
     if not minimal:
         # 7) Downgrade tz
