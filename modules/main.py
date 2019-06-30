@@ -1,12 +1,26 @@
 #!/usr/bin/env python3
 import sys
 import struct
+import os
+import sys
 
 from common import Device
 from handshake import handshake
 from load_payload import load_payload
 from logger import log
 from gpt import parse_gpt_compat, generate_gpt, modify_step1, modify_step2, parse_gpt as gpt_parse_gpt
+
+def check_modemmanager():
+    pids = [pid for pid in os.listdir('/proc') if pid.isdigit()]
+
+    for pid in pids:
+        try:
+            args = open(os.path.join('/proc', pid, 'cmdline'), 'rb').read().decode("utf-8").split('\0')
+            if len(args) > 0 and "modemmanager" in args[0].lower():
+                print("You need to temporarily disable/uninstall ModemManager before this script can proceed")
+                sys.exit(1)
+        except IOError:
+            continue
 
 def switch_boot0(dev):
     dev.emmc_switch(1)
@@ -74,6 +88,8 @@ def parse_gpt(dev):
 def main():
 
     minimal = False
+
+    check_modemmanager()
 
     dev = Device()
     dev.find_device()
