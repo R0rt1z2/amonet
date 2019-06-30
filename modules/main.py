@@ -11,7 +11,7 @@ from gpt import parse_gpt_compat, generate_gpt, modify_step1, modify_step2, pars
 def switch_boot0(dev):
     dev.emmc_switch(1)
     block = dev.emmc_read(0)
-    if block[0:9] != b"EMMC_BOOT":
+    if block[0:9] != b"EMMC_BOOT" and block != b"\x00" * 0x200:
         dev.reboot()
         raise RuntimeError("what's wrong with your BOOT0?")
 
