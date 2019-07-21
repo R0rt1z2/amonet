@@ -148,6 +148,14 @@ int main() {
         }
       }
 
+      // recovery flag on MISC
+      else if(strncmp(bootloader_msg, "boot-recovery", 13) == 0) {
+        *g_boot_mode = 2;
+        // reset flag
+        memset(bootloader_msg, 0, 0x10);
+        dev->write(dev, bootloader_msg, g_misc * 0x200, 0x10, USER_PART);
+      }
+
       // UART flag on MISC
       if(strncmp(bootloader_msg + 0x10, "UART_PLEASE", 11) == 0) {
         // Force uart enable
