@@ -78,27 +78,27 @@ int main() {
     char buf[0x200] = { 0 };
     int ret = 0;
 
-    int (*send_dword)() = (void*)0x9FFF;
-    int (*recv_dword)() = (void*)0x9FCB;
+    int (*send_dword)() = (void*)0xC047;
+    int (*recv_dword)() = (void*)0xC013;
     // addr, sz
-    int (*send_data)() = (void*)0xA0C7;
+    int (*send_data)() = (void*)0xC10F;
     // addr, sz, flags (=0)
-    int (*recv_data)() = (void*)0xA041;
+    int (*recv_data)() = (void*)0xC089;
 
     // Restore the pointer we overwrote
-    uint32_t *ptr_send = (void*)0x1227B4;
-    *ptr_send = 0x3ABF;
+    uint32_t *ptr_send = (void*)0x1028A8;
+    *ptr_send = 0x5FE5;
 
     printf("Entered the payload\n");
 
     struct msdc_host host = { 0 };
     host.ocr_avail = MSDC_OCR_AVAIL;
 
+    mmc_init(&host);
+
     printf("Entering command loop\n");
 
     send_dword(0xB1B2B3B4);
-
-    mmc_init(&host);
 
     while (1) {
         memset(buf, 0, sizeof(buf));
