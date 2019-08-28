@@ -11,9 +11,9 @@ from gpt import parse_gpt_compat, generate_gpt, modify_step1, modify_step2, pars
 def switch_boot0(dev):
     dev.emmc_switch(1)
     block = dev.emmc_read(0)
-    #if block[0:9] != b"EMMC_BOOT":
-    #    dev.reboot()
-    #    raise RuntimeError("what's wrong with your BOOT0?")
+    if block[0:9] != b"EMMC_BOOT":
+        dev.reboot()
+        raise RuntimeError("what's wrong with your BOOT0?")
 
 def flash_data(dev, data, start_block, max_size=0):
     while len(data) % 0x200 != 0:

@@ -208,17 +208,9 @@ int main() {
     patch32 = (void*)&dev->read;
     *patch32 = (uint32_t)read_func;
 
-
     // patch max-download-size to accommodate for payload
     patch32 = (void*)0x4BD3FD1E;
     *patch32 = 0x0380F503; // ADD.W	R3, R3, #0x400000
-
-    /*
-    // Force 64-bit kernel
-    patch32 = (void*)0x4BD701A0;
-    *patch32 = 1;
-
-    */
 
     printf("Clean lk\n");
     cache_clean(lk_dst, LK_SIZE);
