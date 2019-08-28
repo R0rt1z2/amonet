@@ -101,9 +101,10 @@ int main() {
     uint32_t **argptr = (void*)0x4BD00020;
     //printf("(void*)*argptr 0x%08X\n", (void*)*argptr);
     //printf("(void*)argptr 0x%08X\n", (void*)argptr);
-    //*argptr = (void*)0x4be7f288;
+    *argptr = (void*)0x4be5e208;
+    //hex_dump((void*)*argptr, 0x180);
 
-    uint8_t bootloader_msg[0x10] = { 0 };
+    uint8_t bootloader_msg[0x20] = { 0 };
 
     void *lk_dst = (void*)0x4BD00000;
 
@@ -112,18 +113,18 @@ int main() {
     struct device_t *dev = get_device();
 
     // factory and factory advanced boot
-    if(*g_boot_mode == 4 ) {
+    if(*o_boot_mode == 4 ) {
       fastboot = 1;
     }
 
     // use advanced factory mode to boot recovery
-    else if(*g_boot_mode == 6) {
+    else if(*o_boot_mode == 6) {
       *g_boot_mode = 2;
     }
 
     else if(g_misc) {
       // Read amonet-flag from MISC partition
-      dev->read(dev, g_misc * 0x200, bootloader_msg, 0x10, USER_PART);
+      dev->read(dev, g_misc * 0x200, bootloader_msg, 0x20, USER_PART);
       //dev->read(dev, g_misc * 0x200 + 0x4000, bootloader_msg, 0x10, USER_PART);
       printf("bootloader_msg: %s\n", bootloader_msg);
 
@@ -146,6 +147,15 @@ int main() {
           fastboot = 1;
         }
       }
+
+      // UART flag on MISC
+      if(strncmp(bootloader_msg + 0x10, "UART_PLEASE", 11) == 0) {
+        // Force uart enable
+        char* disable_uart = (char*)0x4BD65E44;
+        strcpy(disable_uart, " printk.disable_uart=0");
+	char* disable_uart2 = (char*)0x4BD66AC0;
+        strcpy(disable_uart, "printk.disable_uart=0");
+      }
     }
 
 #ifdef RELOAD_LK
@@ -158,22 +168,20 @@ int main() {
     // force fastboot mode
     if (fastboot) {
         printf("well since you're asking so nicely...\n");
-
-        //patch = (void*)0x4BD3F20C;
-        //*patch = 0xE008;
-
-	//uint32_t* i_boot_mode = (uint32_t*) 0x4BD88114;
-	//*i_boot_mode = 2;
-
-        video_printf("=> HACKED FASTBOOT mode: (%d) - xyz, k4y0z\n", *g_boot_mode);
+	
+	if(*g_boot_mode == 2) *o_boot_mode = 2;
 
 	*g_boot_mode = 99;
+
+        video_printf("=> HACKED FASTBOOT mode: (%d) - xyz, k4y0z\n", *o_boot_mode);
     }
     else if(*g_boot_mode == 2) {
       video_printf("=> RECOVERY mode...");
     }
 
     printf("g_boot_mode %u\n", *g_boot_mode);
+    printf("i_boot_mode %u\n", *i_boot_mode);
+    printf("o_boot_mode %u\n", *o_boot_mode);
 
     // device is unlocked
     patch = (void*)0x4BD205EC;
@@ -187,10 +195,6 @@ int main() {
 
     //printf("(void*)dev->read 0x%08X\n", (void*)dev->read);
     //printf("(void*)&dev->read 0x%08X\n", (void*)&dev->read);
-
-    // Force uart enable
-    char* disable_uart = (char*)0x4BD65E44;
-    strcpy(disable_uart, "printk.disable_uart=0");
 
     uint32_t *patch32;
 
