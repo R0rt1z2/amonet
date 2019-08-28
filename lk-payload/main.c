@@ -23,21 +23,26 @@ void _putchar(char character)
     low_uart_put(character);
 }
 
-int (*original_read)(struct device_t *dev, uint64_t block_off, void *dst, size_t sz, int part) = (void*)0x4BD14271;
-int (*app)() = (void*)0x4BD2CBC1;
+int (*original_read)(struct device_t *dev, uint64_t block_off, void *dst, size_t sz, int part) = (void*)0x4BD358E9;
+int (*app)() = (void*)0x4BD3F1A1;
 
 uint64_t g_boot, g_boot_x, g_lk, g_misc, g_recovery, g_recovery_x;
 
 int read_func(struct device_t *dev, uint64_t block_off, void *dst, size_t sz, int part) {
     printf("read_func hook\n");
-    //hex_dump((void *)0x4BD003DC, 0x100);
+    //hex_dump((void *)0x4BD003C0, 0x100);
+
     printf("block_off 0x%08X 0x%08X\n", block_off, *(&(block_off)+4));
     printf("dev 0x%08X dst 0x%08X sz 0x%08X part 0x%08X\n", dev, dst, sz, part);
     int ret = 0;
     if(block_off == g_boot * 0x200) {
       block_off = g_boot_x * 0x200;
+    } else if(block_off == (g_boot * 0x200) + 0x800) {
+      block_off = (g_boot_x * 0x200) + 0x800;
     } else if(block_off == g_recovery * 0x200) {
       block_off = g_recovery_x * 0x200;
+    } else if(block_off == (g_recovery * 0x200) + 0x800) {
+      block_off = (g_recovery_x * 0x200) + 0x800;
     }
     return original_read(dev, block_off, dst, sz, part);
 }
@@ -76,7 +81,7 @@ static void parse_gpt() {
 int main() {
     int ret = 0;
     printf("This is LK-payload by xyz. Copyright 2019\n");
-    printf("64-Bit version for suez by k4y0z. Copyright 2019\n");
+    printf("64-Bit version for douglas by k4y0z. Copyright 2019\n");
 
     int fastboot = 0;
 
@@ -89,14 +94,17 @@ int main() {
     }
 
     unsigned char overwritten[] = {
-        0x50, 0x7c, 0x06, 0x00, 0x44, 0x7c, 0x06, 0x00
+	0x6C, 0xBC, 0x07, 0x00, 0x60 ,0xBC, 0x07, 0x00
     };
-    memcpy((void*)0x4BD003DC, overwritten, sizeof(overwritten));
+    memcpy((void*)0x4BD003C0, overwritten, sizeof(overwritten));
 
     uint32_t **argptr = (void*)0x4BD00020;
-    *argptr = (void*)0x4be7f288;
+    //printf("(void*)*argptr 0x%08X\n", (void*)*argptr);
+    //printf("(void*)argptr 0x%08X\n", (void*)argptr);
+    //*argptr = (void*)0x4be7f288;
 
     uint8_t bootloader_msg[0x10] = { 0 };
+
     void *lk_dst = (void*)0x4BD00000;
 
     #define LK_SIZE (0x800 * 0x200)
@@ -151,10 +159,15 @@ int main() {
     if (fastboot) {
         printf("well since you're asking so nicely...\n");
 
-        patch = (void*)0x4BD2CC00;
-        *patch = 0xE006;
+        //patch = (void*)0x4BD3F20C;
+        //*patch = 0xE008;
+
+	//uint32_t* i_boot_mode = (uint32_t*) 0x4BD88114;
+	//*i_boot_mode = 2;
 
         video_printf("=> HACKED FASTBOOT mode: (%d) - xyz, k4y0z\n", *g_boot_mode);
+
+	*g_boot_mode = 99;
     }
     else if(*g_boot_mode == 2) {
       video_printf("=> RECOVERY mode...");
@@ -163,12 +176,12 @@ int main() {
     printf("g_boot_mode %u\n", *g_boot_mode);
 
     // device is unlocked
-    patch = (void*)0x4BD042BC;
+    patch = (void*)0x4BD205EC;
     *patch++ = 0x2001; // movs r0, #1
     *patch = 0x4770;   // bx lr
 
     // amzn_verify_limited_unlock (to set androidboot.unlocked_kernel=true)
-    patch = (void*)0x4BD04484;
+    patch = (void*)0x4BD2080C;
     *patch++ = 0x2000; // movs r0, #0
     *patch = 0x4770;   // bx lr
 
@@ -176,7 +189,7 @@ int main() {
     //printf("(void*)&dev->read 0x%08X\n", (void*)&dev->read);
 
     // Force uart enable
-    char* disable_uart = (char*)0x4BD59701;
+    char* disable_uart = (char*)0x4BD65E44;
     strcpy(disable_uart, "printk.disable_uart=0");
 
     uint32_t *patch32;
@@ -185,19 +198,23 @@ int main() {
 
     original_read = (void*)dev->read;
 
-    patch32 = (void*)0x4BD630E4;
+    patch32 = (void*)0x4BD7655C;
     *patch32 = (uint32_t)read_func;
 
     patch32 = (void*)&dev->read;
     *patch32 = (uint32_t)read_func;
 
-    // patch max-download-size to accommodate for payload
-    patch32 = (void*)0x4BD2D55C;
-    *patch32 = 0x0380F50E; // ADD.W	R3, LR, #0x400000
 
+    // patch max-download-size to accommodate for payload
+    patch32 = (void*)0x4BD3FD1E;
+    *patch32 = 0x0380F503; // ADD.W	R3, R3, #0x400000
+
+    /*
     // Force 64-bit kernel
     patch32 = (void*)0x4BD701A0;
     *patch32 = 1;
+
+    */
 
     printf("Clean lk\n");
     cache_clean(lk_dst, LK_SIZE);
