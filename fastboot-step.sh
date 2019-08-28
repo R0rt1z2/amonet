@@ -9,9 +9,10 @@ read
 fastboot flash recovery_x bin/twrp.img
 fastboot erase userdata
 #fastboot format userdata
-fastboot oem reboot-recovery
 
 echo ""
-echo ""
-echo "Your device should now reboot into TWRP"
+echo "Hold the left volume-button, then press Enter to reboot..."
+read
+fastboot reboot
+echo "Rebooting... keep holding the button until you see TWRP"
 echo ""
