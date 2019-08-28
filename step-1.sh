@@ -6,11 +6,11 @@ set -e
 
 adb wait-for-device
 
-max_tee=263
+max_tee=259
 max_lk=2
-max_pl=5
+max_pl=6
 
-check_device "suez" " - Amazon Fire HD 10 (2017) - "
+check_device "douglas" " - Amazon Fire HD 8 (2017) - "
 
 get_root
 
