@@ -103,14 +103,14 @@ def aes_write16(dev, addr, data):
 
 class UserInputThread(threading.Thread):
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, msg = "* * * If you have a short attached, remove it now * * *\n* * * Press Enter to continue * * *", *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.done = False
+        self.msg = msg
 
     def run(self):
         print("")
-        print(" * * * If you have a short attached, remove it now * * * ")
-        print(" * * * Press Enter to continue * * * ")
+        print(self.msg)
         print("")
         input()
         self.done = True
