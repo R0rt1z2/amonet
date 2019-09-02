@@ -17,6 +17,7 @@ get_root
 tee_version=$((`adb shell getprop ro.boot.tee_version | dos2unix`))
 lk_version=$((`adb shell getprop ro.boot.lk_version | dos2unix`))
 pl_version=$((`adb shell getprop ro.boot.pl_version | dos2unix`))
+serialno=`adb shell getprop ro.boot.serialno | dos2unix`
 
 echo "PL version: ${pl_version} (${max_pl})"
 echo "LK version: ${lk_version} (${max_lk})"
@@ -56,18 +57,18 @@ echo "Press Enter to Continue..."
 read
 
 echo "Dumping GPT"
-[ ! -d gpt ] && mkdir gpt
+[ ! -d gpt-${serialno} ] && mkdir gpt-${serialno}
 adb shell su -c \"dd if=/dev/block/mmcblk0 bs=512 count=34 of=/data/local/tmp/gpt.bin\" 
 adb shell su -c \"chmod 644 /data/local/tmp/gpt.bin\" 
-adb pull /data/local/tmp/gpt.bin gpt/gpt.bin
+adb pull /data/local/tmp/gpt.bin gpt-${serialno}/gpt.bin
 echo ""
 
 echo "Modifying GPT"
-modules/gpt.py patch gpt/gpt.bin
+modules/gpt.py patch gpt-${serialno}/gpt.bin
 echo ""
 
 echo "Flashing temp GPT"
-adb push gpt/gpt.bin.step1.gpt /data/local/tmp/
+adb push gpt-${serialno}/gpt.bin.step1.gpt /data/local/tmp/
 adb shell su -c \"dd if=/data/local/tmp/gpt.bin.step1.gpt of=/dev/block/mmcblk0 bs=512 count=34\" 
 echo ""
 

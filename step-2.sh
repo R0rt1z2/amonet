@@ -12,6 +12,8 @@ check_device "douglas" " - Amazon Fire HD 8 (2017) - "
 
 get_root
 
+serialno=`adb shell getprop ro.boot.serialno | dos2unix`
+
 set +e
 echo "Looking for partition-suffix"
 adb shell su -c \"ls -l /dev/block/platform/soc/by-name\" | grep recovery_tmp
@@ -34,25 +36,25 @@ fi
 set -e
 echo ""
 
-if [ ! -f "gpt/gpt.bin.step2.gpt" ]; then
+if [ ! -f "gpt-${serialno}/gpt.bin.step2.gpt" ]; then
   echo "Couldn't find GPT files, regenerating from device"
   echo ""
 
   echo "Dumping GPT"
-  [ ! -d gpt-regen ] && mkdir gpt-regen
+  [ ! -d gpt-${serialno}-regen ] && mkdir gpt-${serialno}-regen
   adb shell su -c \"dd if=/dev/block/mmcblk0 bs=512 count=34 of=/data/local/tmp/gpt.bin\" 
   adb shell su -c \"chmod 644 /data/local/tmp/gpt.bin\" 
-  adb pull /data/local/tmp/gpt.bin gpt-regen/gpt.bin
+  adb pull /data/local/tmp/gpt.bin gpt-${serialno}-regen/gpt.bin
   echo ""
 
   echo "Unpatching GPT"
-  modules/gpt.py unpatch gpt-regen/gpt.bin
-  [ ! -d gpt ] && mkdir gpt
-  cp gpt-regen/gpt.bin.unpatched.gpt gpt/gpt.bin
+  modules/gpt.py unpatch gpt-${serialno}-regen/gpt.bin
+  [ ! -d gpt-${serialno} ] && mkdir gpt-${serialno}
+  cp gpt-${serialno}-regen/gpt.bin.unpatched.gpt gpt-${serialno}/gpt.bin
   echo ""
 
   echo "Modifying GPT"
-  modules/gpt.py patch gpt/gpt.bin
+  modules/gpt.py patch gpt-${serialno}/gpt.bin
   echo ""
 fi
 
@@ -86,15 +88,15 @@ adb shell su -c \"dd if=/data/local/tmp/preloader.bin of=/dev/block/mmcblk0boot0
 echo ""
 
 echo "Flashing final GPT"
-adb push gpt/gpt.bin.step2.gpt /data/local/tmp/
+adb push gpt-${serialno}/gpt.bin.step2.gpt /data/local/tmp/
 adb shell su -c \"dd if=/data/local/tmp/gpt.bin.step2.gpt of=/dev/block/mmcblk0 bs=512 count=34\" 
 echo ""
-if [ -f "gpt/gpt.bin.offset" ] ; then
-  OFFSET=$(cat gpt/gpt.bin.offset)
+if [ -f "gpt-${serialno}/gpt.bin.offset" ] ; then
+  OFFSET=$(cat gpt-${serialno}/gpt.bin.offset)
   # Check if $OFFSET has some sane value
   if [ $OFFSET -gt 25000000 ] ; then
     echo "Flashing final GPT (backup)"
-    adb push gpt/gpt.bin.step2.bak /data/local/tmp/
+    adb push gpt-${serialno}/gpt.bin.step2.bak /data/local/tmp/
     adb shell su -c \"dd if=/data/local/tmp/gpt.bin.step2.bak of=/dev/block/mmcblk0 bs=512 seek=${OFFSET}\" 
     echo ""
   fi
