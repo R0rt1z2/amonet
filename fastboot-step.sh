@@ -2,8 +2,8 @@
 
 set -e
 
-fastboot flash boot bin/recovery-inj.img
-fastboot flash recovery bin/recovery-inj.img
+fastboot flash tee2 bin/tz.img
+fastboot flash recovery bin/twrp.img
 fastboot reboot recovery
 
 echo ""

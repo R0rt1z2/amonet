@@ -1,20 +1,20 @@
 import struct
+import sys
 
 from common import Device
 from handshake import handshake
 from load_payload import load_payload
 from logger import log
+from gpt import parse_gpt_compat, generate_gpt, modify_step1, modify_step2, parse_gpt as gpt_parse_gpt
 
 def switch_boot0(dev):
     dev.emmc_switch(1)
     block = dev.emmc_read(0)
-    if block[0:9] != b"EMMC_BOOT":
+    if block[0:9] != b"EMMC_BOOT" and block[0:9] != b'\x00' * 9:
         dev.reboot()
         raise RuntimeError("what's wrong with your BOOT0?")
 
-def flash_binary(dev, path, start_block, max_size=0):
-    with open(path, "rb") as fin:
-        data = fin.read()
+def flash_data(dev, data, start_block, max_size=0):
     while len(data) % 0x200 != 0:
         data += b"\x00"
 
@@ -26,6 +26,14 @@ def flash_binary(dev, path, start_block, max_size=0):
         print("[{} / {}]".format(x + 1, blocks), end='\r')
         dev.emmc_write(start_block + x, data[x * 0x200:(x + 1) * 0x200])
     print("")
+
+def flash_binary(dev, path, start_block, max_size=0):
+    with open(path, "rb") as fin:
+        data = fin.read()
+    while len(data) % 0x200 != 0:
+        data += b"\x00"
+
+    flash_data(dev, data, start_block, max_size=0)
 
 def dump_binary(dev, path, start_block, max_size=0):
     with open(path, "w+b") as fout:
@@ -59,14 +67,15 @@ def switch_user(dev):
 def parse_gpt(dev):
     data = dev.emmc_read(0x400 // 0x200) + dev.emmc_read(0x600 // 0x200) + dev.emmc_read(0x800 // 0x200) + dev.emmc_read(0xA00 // 0x200) + dev.emmc_read(0xC00 // 0x200)
     num = len(data) // 0x80
-    parts = dict()
-    for x in range(num):
-        part = data[x * 0x80:(x + 1) * 0x80]
-        part_name = part[0x38:].decode("utf-16le").rstrip("\x00")
-        part_start = struct.unpack("<Q", part[0x20:0x28])[0]
-        part_end = struct.unpack("<Q", part[0x28:0x30])[0]
-        parts[part_name] = (part_start, part_end - part_start + 1)
-    return parts
+    return parse_gpt_compat(dev.emmc_read(0x200 // 0x200) + data)
+#    parts = dict()
+#    for x in range(num):
+#        part = data[x * 0x80:(x + 1) * 0x80]
+#        part_name = part[0x38:].decode("utf-16le").rstrip("\x00")
+#        part_start = struct.unpack("<Q", part[0x20:0x28])[0]
+#        part_end = struct.unpack("<Q", part[0x28:0x30])[0]
+#        parts[part_name] = (part_start, part_end - part_start + 1)
+#    return parts
 
 def main():
     dev = Device()
@@ -78,23 +87,52 @@ def main():
     # 0.2) Load brom payload
     load_payload(dev, "../brom-payload/build/payload.bin")
 
+    # Clear preloader so, we get into bootrom without shorting, should the script stall (we flash preloader as last step)
+    # 10) Downgrade preloader
+    log("Clear preloader header")
+    switch_boot0(dev)
+    flash_data(dev, b"EMMC_BOOT" + b"\x00" * ((0x200 * 8) - 9), 0)
+
+    if len(sys.argv) == 2 and sys.argv[1] == "fixgpt":
+        dev.emmc_switch(0)
+        log("Flashing GPT")
+        flash_binary(dev, "../bin/gpt-biscuit.bin", 0, 34 * 0x200)
+
     # 1) Sanity check GPT
     log("Check GPT")
     switch_user(dev)
 
     # 1.1) Parse gpt
-    gpt = parse_gpt(dev)
-    log("gpt_parsed = {}".format(gpt))
+    gpt, gpt_header, part_list = parse_gpt(dev)
+    #log("gpt_parsed = {}".format(gpt))
     if "lk_a" not in gpt or "tee1" not in gpt or "boot_a" not in gpt or "recovery" not in gpt:
         raise RuntimeError("bad gpt")
 
-    if "boot_aa" not in gpt or "boot_bb" not in gpt:
-        log("Flash new GPT")
-        flash_binary(dev, "../bin/gpt.patched.bin", 0, 0x800 * 0x200)
-        gpt = parse_gpt(dev)
-        log("gpt_parsed = {}".format(gpt))
-        if "boot_aa" not in gpt or "boot_bb" not in gpt:
+    if "boot_a_x" not in gpt or "boot_b_x" not in gpt:
+        log("Modify GPT")
+
+        if "boot_a_tmp" not in gpt and "boot_b_tmp" not in gpt:
+            part_list_mod1 = modify_step1(part_list)
+        else:
+            part_list_mod1 = part_list
+
+        part_list_mod2 = modify_step2(part_list_mod1)
+        primary, backup = generate_gpt(gpt_header, part_list_mod2)
+
+        log("Validate GPT")
+        gpt_header, part_list = gpt_parse_gpt(bytes(primary))
+
+        log("Flash new primary GPT")
+        flash_data(dev, primary, 0)
+
+        log("Flash new backup GPT")
+        flash_data(dev, backup, gpt_header['last_lba'] + 1)
+
+        gpt, gpt_header, part_list = parse_gpt(dev)
+        #log("gpt_parsed = {}".format(gpt))
+        if "boot_a_x" not in gpt or "boot_b_x" not in gpt:
             raise RuntimeError("bad gpt")
+
         log("Wipe userdata")
         wipe_userdata(dev, gpt)
 
@@ -109,31 +147,26 @@ def main():
         log("rpmb looks broken; if this is expected (i.e. you're retrying the exploit) press enter, otherwise terminate with Ctrl+C")
         input()
 
-#    # 4) Zero out rpmb to enable downgrade
-#    log("Downgrade rpmb")
-#    dev.rpmb_write(b"\x00" * 0x100)
-#    log("Recheck rpmb")
-#    rpmb = dev.rpmb_read()
-#    if rpmb != b"\x00" * 0x100:
-#        dev.reboot()
-#        raise RuntimeError("downgrade failure, giving up")
-#    log("rpmb downgrade ok")
-#
-#    # 6) Downgrade preloader
-#    log("Flash preloader")
-#    switch_boot0(dev)
-#    #flash_binary(dev, "../bin/preloader.img", 0)
-#
-#    # 7) Downgrade tz
-#    log("Flash tz")
-#    switch_user(dev)
-#    #flash_binary(dev, "../bin/tz.img", gpt["tee1"][0], gpt["tee1"][1] * 0x200)
-#
-#    # 8) Downgrade lk
-#    log("Flash lk")
-#    switch_user(dev)
-#    flash_binary(dev, "../bin/lk.bin", gpt["lk_a"][0], gpt["lk_a"][1] * 0x200)
-#    flash_binary(dev, "../bin/lk.bin", gpt["lk_b"][0], gpt["lk_b"][1] * 0x200)
+    # 4) Zero out rpmb to enable downgrade
+    log("Downgrade rpmb")
+    dev.rpmb_write(b"\x00" * 0x100)
+    log("Recheck rpmb")
+    rpmb = dev.rpmb_read()
+    if rpmb != b"\x00" * 0x100:
+        dev.reboot()
+        raise RuntimeError("downgrade failure, giving up")
+    log("rpmb downgrade ok")
+
+    # 7) Downgrade tz
+    log("Flash tz")
+    switch_user(dev)
+    flash_binary(dev, "../bin/tz.img", gpt["tee1"][0], gpt["tee1"][1] * 0x200)
+
+    # 8) Downgrade lk
+    log("Flash lk")
+    switch_user(dev)
+    flash_binary(dev, "../bin/lk.bin", gpt["lk_a"][0], gpt["lk_a"][1] * 0x200)
+    flash_binary(dev, "../bin/lk.bin", gpt["lk_b"][0], gpt["lk_b"][1] * 0x200)
 
     # 9) Flash microloader
     log("Inject payload")
@@ -150,6 +183,11 @@ def main():
     #flash_binary(dev, "../echo-dot-new-bins/misc.img", gpt["misc"][0], gpt["misc"][1] * 0x200)
     log("Enable hacked fastboot for next boot")
     force_fastboot(dev, gpt)
+
+    # 6) Downgrade preloader
+    log("Flash preloader")
+    switch_boot0(dev)
+    flash_binary(dev, "../bin/preloader.img", 0)
 
     # Reboot (to fastboot)
     log("Reboot to unlocked fastboot")

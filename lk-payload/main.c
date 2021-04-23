@@ -26,7 +26,7 @@ void _putchar(char character)
 int (*original_read)(struct device_t *dev, uint64_t block_off, void *dst, size_t sz, int part) = (void*)0x4BD2AE2D;
 int (*app)() = (void*)0x4BD341D5;
 
-uint64_t g_boot_a, g_boot_aa, g_boot_b, g_boot_bb, g_lk_a, g_lk_b, g_misc, g_recovery;
+uint64_t g_boot_a, g_boot_a_x, g_boot_b, g_boot_b_x, g_lk_a, g_lk_b, g_misc, g_recovery;
 uint8_t boot_recovery = 0;
 
 int read_func(struct device_t *dev, uint64_t block_off, void *dst, size_t sz, int part) {
@@ -39,28 +39,28 @@ int read_func(struct device_t *dev, uint64_t block_off, void *dst, size_t sz, in
         block_off = g_recovery * 0x200;
       }
       else {
-        block_off = g_boot_aa * 0x200;
+        block_off = g_boot_a_x * 0x200;
       }
     } else if(block_off == (g_boot_a * 0x200) + 0x800) {
       if(boot_recovery) {
          block_off = (g_recovery * 0x200) + 0x800;
       }
       else {
-        block_off = (g_boot_aa * 0x200) + 0x800;
+        block_off = (g_boot_a_x * 0x200) + 0x800;
       }
     } else if(block_off == g_boot_b * 0x200) {
       if(boot_recovery) {
         block_off = g_recovery * 0x200;
       }
       else {
-        block_off = g_boot_bb * 0x200;
+        block_off = g_boot_b_x * 0x200;
       }
     } else if(block_off == (g_boot_b * 0x200) + 0x800) {
       if(boot_recovery) {
         block_off = (g_recovery * 0x200) + 0x800;
       }
       else {
-        block_off = (g_boot_bb * 0x200) + 0x800;
+        block_off = (g_boot_b_x * 0x200) + 0x800;
       }
     }
     return original_read(dev, block_off, dst, sz, part);
@@ -78,15 +78,15 @@ static void parse_gpt() {
         if (memcmp(name, "b\x00o\x00o\x00t\x00_\x00\x61\x00\x00\x00", 14) == 0) {
             printf("found boot_a at 0x%08X\n", start);
             g_boot_a = start;
-        } else if (memcmp(name, "b\x00o\x00o\x00t\x00_\x00\x61\x00\x61\x00\x00\x00", 16) == 0) {
-            printf("found boot_aa at 0x%08X\n", start);
-            g_boot_aa = start;
+        } else if (memcmp(name, "b\x00o\x00o\x00t\x00_\x00\x61\x00_\x00x\x00\x00\x00", 18) == 0) {
+            printf("found boot_a_x at 0x%08X\n", start);
+            g_boot_a_x = start;
         } else if (memcmp(name, "b\x00o\x00o\x00t\x00_\x00\x62\x00\x00\x00", 14) == 0) {
             printf("found boot_b at 0x%08X\n", start);
             g_boot_b = start;
-        } else if (memcmp(name, "b\x00o\x00o\x00t\x00_\x00\x62\x00\x62\x00\x00\x00", 16) == 0) {
-            printf("found boot_bb at 0x%08X\n", start);
-            g_boot_bb = start;
+        } else if (memcmp(name, "b\x00o\x00o\x00t\x00_\x00\x62\x00_\x00x\x00\x00\x00", 18) == 0) {
+            printf("found boot_b_x at 0x%08X\n", start);
+            g_boot_b_x = start;
         } else if (memcmp(name, "l\x00k\x00_\x00\x61\x00\x00\x00", 10) == 0) {
             printf("found lk_a at 0x%08X\n", start);
             g_lk_a = start;
@@ -106,13 +106,13 @@ static void parse_gpt() {
 int main() {
     int ret = 0;
     printf("This is LK-payload by xyz. Copyright 2019\n");
-    printf("64-Bit version for biscuit by k4y0z. Copyright 2019\n");
+    printf("64-Bit version for biscuit by k4y0z. Copyright 2020\n");
 
     int fastboot = 0;
 
     parse_gpt();
 
-    if (!g_boot_aa || !g_boot_bb || !g_lk_a) {
+    if (!g_boot_a_x || !g_boot_b_x || !g_lk_a) {
         printf("failed to find boot, recovery or lk\n");
         printf("falling back to fastboot mode\n");
         fastboot = 1;
