@@ -22,8 +22,8 @@ cp bin/recovery.img dist/stock/amonet/bin/
 cp return-to-stock.sh dist/stock/amonet/
 
 mkdir -p dist/gptfix/amonet/bin
-cp {gpt-fix-16G.sh,gpt-fix-32G.sh} dist/gptfix/amonet/
-cp bin/{gpt-douglas-16G.bin,gpt-douglas-32G.bin} dist/gptfix/amonet/bin/
+cp gpt-fix.sh dist/gptfix/amonet/
+cp bin/gpt-giza.bin dist/gptfix/amonet/bin/
 
 mkdir -p dist/full
 cp -r dist/unlock/* dist/full/

@@ -11,9 +11,6 @@ from load_payload import load_payload, UserInputThread
 from logger import log
 from gpt import parse_gpt_compat, generate_gpt, modify_step1, modify_step2, parse_gpt as gpt_parse_gpt
 
-fix16 = False
-fix32 = False
-
 def check_modemmanager():
     pids = [pid for pid in os.listdir('/proc') if pid.isdigit()]
 
@@ -75,16 +72,7 @@ def force_fastboot(dev, gpt):
     block = dev.emmc_read(gpt["MISC"][0])
 
 def switch_user(dev):
-    global fix16, fix32
     dev.emmc_switch(0)
-    if fix16:
-        log("Flashing 16G GPT")
-        flash_binary(dev, "../bin/gpt-douglas-16G.bin", 0, 34 * 0x200)
-        fix16 = False
-    if fix32:
-        log("Flashing 32G GPT")
-        flash_binary(dev, "../bin/gpt-douglas-32G.bin", 0, 34 * 0x200)
-        fix32 = False
     block = dev.emmc_read(0)
     if block[510:512] != b"\x55\xAA":
         dev.reboot()
@@ -105,9 +93,6 @@ def parse_gpt(dev):
 #    return parts
 
 def main():
-
-    global fix16, fix32
-
     minimal = False
 
     check_modemmanager()
@@ -129,10 +114,11 @@ def main():
             dev.kick_watchdog()
             time.sleep(1)
         minimal = True
-    elif len(sys.argv) == 2 and sys.argv[1] == "fix16":
-        fix16 = True
-    elif len(sys.argv) == 2 and sys.argv[1] == "fix32":
-        fix32 = True
+
+    if len(sys.argv) == 2 and sys.argv[1] == "fixgpt":
+        dev.emmc_switch(0)
+        log("Flashing GPT")
+        flash_binary(dev, "../bin/gpt-douglas.bin", 0, 34 * 0x200)
 
     # 1) Sanity check GPT
     log("Check GPT")
