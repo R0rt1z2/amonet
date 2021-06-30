@@ -9,9 +9,9 @@ struct device_t {
     size_t (*write)(struct device_t *dev, void *src, uint64_t block_off, size_t size, uint32_t part);
 };
 
-struct device_t* (*get_device)() = (void*)0x4BD35E41;
-void (*cache_clean)(void *addr, size_t sz) = (void*)0x4BD3C740;
-size_t (*video_printf)(const char *format, ...) = (void *)0x4BD44B3D;
+struct device_t* (*get_device)() = (void*)0x4BD35A91;
+void (*cache_clean)(void *addr, size_t sz) = (void*)0x4BD3C368;
+size_t (*video_printf)(const char *format, ...) = (void *)0x4BD434B1;
 
 uint32_t* g_boot_mode = (uint32_t*) 0x4BD7C3A0; // LK boot mode
 uint32_t* i_boot_mode = (uint32_t*) 0x4BD88114; // IDME boot_mode
