@@ -8,7 +8,7 @@ set -e
 
 adb wait-for-device
 
-check_device "douglas" " - Amazon Fire HD 8 (2017) - "
+check_device "giza" " - Amazon Fire HD 8 (2016) - "
 
 get_root
 

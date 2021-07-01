@@ -6,8 +6,8 @@ adb wait-for-device
 
 product=$(adb shell getprop ro.product.name | dos2unix)
 
-if [ "$product" != "douglas" ] ; then
-  echo "This is only for the \"douglas\" (Amazon Fire HD8 (2017)), your device is a \"${product}\""
+if [ "$product" != "giza" ] ; then
+  echo "This is only for the \"giza\" (Amazon Fire HD8 (2016)), your device is a \"${product}\""
   exit 1
 fi
 

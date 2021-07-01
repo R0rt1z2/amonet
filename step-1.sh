@@ -10,7 +10,7 @@ max_tee=259
 max_lk=2
 max_pl=6
 
-check_device "douglas" " - Amazon Fire HD 8 (2017) - "
+check_device "giza" " - Amazon Fire HD 8 (2016) - "
 
 get_root
 
