@@ -80,7 +80,9 @@ def switch_user(dev):
     dev.kick_watchdog()
 
 def parse_gpt(dev):
-    data = dev.emmc_read(0x400 // 0x200) + dev.emmc_read(0x600 // 0x200) + dev.emmc_read(0x800 // 0x200) + dev.emmc_read(0xA00 // 0x200) + dev.emmc_read(0xC00 // 0x200)
+    data = b''
+    for x in range(2, 34):
+        data += dev.emmc_read(x)
     num = len(data) // 0x80
     return parse_gpt_compat(dev.emmc_read(0x200 // 0x200) + data)
 #    parts = dict()
