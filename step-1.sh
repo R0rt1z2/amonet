@@ -6,9 +6,9 @@ set -e
 
 adb wait-for-device
 
-max_tee=259
-max_lk=2
-max_pl=6
+max_tee=258
+max_lk=1
+max_pl=2
 
 check_device "giza" " - Amazon Fire HD 8 (2016) - "
 
