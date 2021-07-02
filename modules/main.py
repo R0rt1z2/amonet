@@ -172,12 +172,12 @@ def main():
             time.sleep(1)
 
     # Clear preloader so, we get into bootrom without shorting, should the script stall (we flash preloader as last step)
-    # 10) Downgrade preloader
+    # 4) Downgrade preloader
     log("Clear preloader header")
     switch_boot0(dev)
     flash_data(dev, b"EMMC_BOOT" + b"\x00" * ((0x200 * 8) - 9), 0)
 
-    # 4) Zero out rpmb to enable downgrade
+    # 5) Zero out rpmb to enable downgrade
     log("Downgrade rpmb")
     dev.rpmb_write(b"\x00" * 0x100)
     log("Recheck rpmb")
@@ -189,6 +189,12 @@ def main():
     dev.kick_watchdog()
 
     if not minimal:
+        # 6) Install preloader
+        log("Flash preloader")
+        switch_boot0(dev)
+        flash_binary(dev, "../bin/preloader.bin", 8)
+        flash_binary(dev, "../bin/preloader.bin", 520)
+    
         # 7) Downgrade tz
         log("Flash tz")
         switch_user(dev)
@@ -212,12 +218,11 @@ def main():
     log("Force fastboot")
     force_fastboot(dev, gpt)
 
-    # Flash preloader as last step, so we still have access to bootrom, should the script stall
     # 10) Downgrade preloader
-    log("Flash preloader")
+    log("Flash preloader header")
     switch_boot0(dev)
-    flash_binary(dev, "../bin/boot0short.img", 0)
-    flash_binary(dev, "../bin/preloader.bin", 520)
+    flash_binary(dev, "../bin/preloader.hdr0", 0, 4)
+    flash_binary(dev, "../bin/preloader.hdr1", 4, 4)
 
     # Reboot (to fastboot)
     log("Reboot to unlocked fastboot")

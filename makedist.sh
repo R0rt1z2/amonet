@@ -3,7 +3,7 @@
 rm -rf dist
 
 mkdir -p dist/unlock/amonet/bin
-cp bin/{boot0short.img,preloader.bin,minisu.img,busybox,lk.bin,tz.img,twrp.img,boot.hdr,boot.payload} dist/unlock/amonet/bin/
+cp bin/{preloader.hdr0,preloader.hdr1,preloader.bin,minisu.img,busybox,lk.bin,tz.img,twrp.img,boot.hdr,boot.payload} dist/unlock/amonet/bin/
 echo -ne "boot-recovery\x00" > dist/unlock/amonet/bin/boot-recovery.bin
 
 mkdir -p dist/unlock/amonet/modules
