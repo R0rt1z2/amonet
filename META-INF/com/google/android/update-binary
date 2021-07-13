@@ -36,7 +36,7 @@ grep_prop() {
 }
 
 check_product() {
-  product=$(grep_prop ro.product.device)
+  product=$(grep_prop ro.build.product)
 
   if [ "$product" != "${1}" ] ; then
     ui_print "This is only for the \"${1}\"${2}, your device is a \"${product}\""
