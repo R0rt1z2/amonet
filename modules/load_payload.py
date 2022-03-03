@@ -137,6 +137,7 @@ def load_payload(dev, path):
 #        for x in range(0, 0x20000, 16):
 #            dump.write((aes_read16(dev, x)))
     aes_write16(dev, 0x102868, bytes.fromhex("00000000000000000000000080000000"))
+    aes_write16(dev, 0x1072DC, bytes.fromhex("00000000000000000000000080000000"))
 
     with open(path, "rb") as fin:
         payload = fin.read()
