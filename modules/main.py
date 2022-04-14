@@ -224,6 +224,9 @@ def main():
     flash_binary(dev, "../bin/preloader.hdr0", 0, 4)
     flash_binary(dev, "../bin/preloader.hdr1", 4, 4)
 
+    # 10.1) Wait some time so data is flushed to EMMC
+    time.sleep(5)
+
     # Reboot (to fastboot)
     log("Reboot to unlocked fastboot")
     dev.reboot()
