@@ -15,7 +15,7 @@ TIMEOUT = 5
 CRYPTO_BASE = 0x11018000 # for ariel
 
 
-def serial_ports (vid="0E8D", pid="0003"):
+def serial_ports (vid="0E8D", pid="3000"):
     """ Lists available serial ports
 
         :raises EnvironmentError:
@@ -54,18 +54,13 @@ class Device:
         if port:
             self.dev = serial.Serial(port, BAUD, timeout=TIMEOUT)
 
-    def find_device(self,preloader=False):
+    def find_device(self):
         if self.dev:
             raise RuntimeError("Device already found")
 
-        if preloader:
-            log("Waiting for preloader")
-            vid = "0E8D"
-            pid = "2000"
-        else:
-            log("Waiting for bootrom")
-            vid = "0E8D"
-            pid = "0003"
+        log("Waiting for preloader")
+        vid = "0E8D"
+        pid = "3000"
 
         old = serial_ports(vid, pid)
         while True:
