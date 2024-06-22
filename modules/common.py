@@ -12,7 +12,7 @@ BAUD = 115200
 TIMEOUT = 5
 
 
-CRYPTO_BASE = 0x10210000 # for suez
+CRYPTO_BASE = 0x11018000 # for ariel
 
 
 def serial_ports (vid="0E8D", pid="0003"):

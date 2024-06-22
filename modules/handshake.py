@@ -8,7 +8,7 @@ def handshake(dev):
     log("Handshake")
     dev.handshake()
     log("Disable watchdog")
-    dev.write32(0x10007000, 0x22000000)
+    dev.write32(0x10000000, 0x22000000)
 
 
 if __name__ == "__main__":
