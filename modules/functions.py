@@ -108,22 +108,15 @@ def clear_flags(dev, gpt):
     block = dev.emmc_read(gpt["MISC"][0])
 
 def switch_user(dev):
-    dev.emmc_switch(0)
-    block = dev.emmc_read(0)
-    if block[510:512] != b"\x55\xAA":
-        dev.reboot()
-        raise RuntimeError("what's wrong with your GPT?")
-    dev.kick_watchdog()
+    dev.mmc.set_part(0)
+    for i in [0x0a00000, 0x0400000, 0x0780000]:
+        block = dev.mmc.read_block(i // 0x200)
+        if block[510:512] == b"\x55\xAA":
+            return dev.mmc.set_gpt_start(i + 0x200)
+
+    raise RuntimeError("what's wrong with your GPT?")
 
 def parse_gpt(dev):
-    data = dev.emmc_read(0x400 // 0x200) + dev.emmc_read(0x600 // 0x200) + dev.emmc_read(0x800 // 0x200) + dev.emmc_read(0xA00 // 0x200) + dev.emmc_read(0xC00 // 0x200)
-    num = len(data) // 0x80
-    return parse_gpt_compat(dev.emmc_read(0x200 // 0x200) + data)
-#    parts = dict()
-#    for x in range(num):
-#        part = data[x * 0x80:(x + 1) * 0x80]
-#        part_name = part[0x38:].decode("utf-16le").rstrip("\x00")
-#        part_start = struct.unpack("<Q", part[0x20:0x28])[0]
-#        part_end = struct.unpack("<Q", part[0x28:0x30])[0]
-#        parts[part_name] = (part_start, part_end - part_start + 1)
-#    return parts
+    start = dev.mmc.gpt_start
+    data = dev.mmc.read_block((start + 0x200) // 0x200) + dev.mmc.read_block((start + 0x400) // 0x200) + dev.mmc.read_block((start + 0x600) // 0x200) + dev.mmc.read_block((start + 0x800) // 0x200) + dev.mmc.read_block((start + 0xA00) // 0x200) + dev.mmc.read_block((start + 0xC00) // 0x200)
+    return parse_gpt_compat(dev.mmc.read_block(start // 0x200) + data)

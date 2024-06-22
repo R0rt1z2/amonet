@@ -51,8 +51,12 @@ class Device:
 
     def __init__(self, port=None):
         self.dev = None
+        self.mmc = None
         if port:
             self.dev = serial.Serial(port, BAUD, timeout=TIMEOUT)
+
+    def set_mmc(self, mmc):
+        self.mmc = mmc
 
     def find_device(self):
         if self.dev:

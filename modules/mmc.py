@@ -218,6 +218,7 @@ class Mmc:
         self.device.write32(self.base + reg.value, [v])
 
     def __init__(self, device, base, debug=False):
+        self.gpt_start = 0
         self.device = device
         self.base = base
         self.debug = debug
@@ -227,6 +228,9 @@ class Mmc:
 
         # for MT8127 / MT8163 / MT8135
         self.msdc_ocr_avail = Mmc.Vdd.MMC_VDD_28_29 | Mmc.Vdd.MMC_VDD_29_30 | Mmc.Vdd.MMC_VDD_30_31 | Mmc.Vdd.MMC_VDD_31_32 | Mmc.Vdd.MMC_VDD_32_33
+
+    def set_gpt_start(self, start):
+        self.gpt_start = start
 
     def msdc_reset_hw(self):
         pass
@@ -567,16 +571,16 @@ class Mmc:
 
         return 0
 
-    def mmc_set_part(self, part):
+    def set_part(self, part):
         assert self.__mmc_switch(1, 179, 72 | part) == 0
 
-    def mmc_read_single_block(self, block):
+    def read_block(self, block):
         self.__msdc_set_blknum(1)
         assert self.mmc_command(Mmc.Opcode.MMC_READ_SINGLE_BLOCK, block, Mmc.Flags.MMC_RSP_R1 | Mmc.Flags.MMC_CMD_ADTC)[
                    0] == 0
         return self.__msdc_pio_read()
 
-    def mmc_write_single_block(self, block, buffer: bytes):
+    def write_block(self, block, buffer: bytes):
         assert len(buffer) == 512
         self.__msdc_set_blknum(1)
         assert self.mmc_command(Mmc.Opcode.MMC_WRITE_BLOCK, block, Mmc.Flags.MMC_RSP_R1 | Mmc.Flags.MMC_CMD_ADTC)[

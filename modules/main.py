@@ -11,14 +11,19 @@ from load_payload import load_payload
 from logger import log
 from functions import *
 from gpt import parse_gpt_compat, generate_gpt, modify_step1, modify_step2, parse_gpt as gpt_parse_gpt
+from mmc import Mmc
 
 def main():
-    check_modemmanager()
+    # check_modemmanager()
     dev = Device()
     dev.find_device()
 
     # 0.1) Handshake
     handshake(dev)
+
+    # 0.2) Initialize eMMC
+    log("Init emmc")
+    dev.set_mmc(Mmc(dev, 0x11230000))
 
     if len(sys.argv) == 2 and sys.argv[1] == "fixgpt":
         dev.emmc_switch(0)
@@ -32,7 +37,7 @@ def main():
     # 1.1) Parse gpt
     gpt, gpt_header, part_list = parse_gpt(dev)
     #log("gpt_parsed = {}".format(gpt))
-    if "lk" not in gpt or "TEE1" not in gpt or "boot" not in gpt or "recovery" not in gpt:
+    if "UBOOT" not in gpt or "TEE1" not in gpt or "boot" not in gpt or "recovery" not in gpt:
         raise RuntimeError("bad gpt")
 
     if "boot_x" not in gpt or "recovery_x" not in gpt:
