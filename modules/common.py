@@ -12,22 +12,22 @@ BAUD = 115200
 TIMEOUT = 5
 
 
-CRYPTO_BASE = 0x11018000 # for ariel
+CRYPTO_BASE = 0x11018000  # for ariel
 
 
-def serial_ports (vid="0E8D", pid="3000"):
-    """ Lists available serial ports
+def serial_ports(vid="0E8D", pid="3000"):
+    """Lists available serial ports
 
-        :raises EnvironmentError:
-            On unsupported or unknown platforms
-        :returns:
-            A set containing the serial ports available on the system
+    :raises EnvironmentError:
+        On unsupported or unknown platforms
+    :returns:
+        A set containing the serial ports available on the system
     """
 
     result = set()
     ports = list(serial.tools.list_ports.comports())
     for port in ports:
-        if hasattr(port, 'hwid'):
+        if hasattr(port, "hwid"):
             portHwid = port.hwid
             portDevice = port.device
         else:
@@ -43,12 +43,12 @@ def serial_ports (vid="0E8D", pid="3000"):
 
     return result
 
+
 def p32_be(x):
     return struct.pack(">I", x)
 
 
 class Device:
-
     def __init__(self, port=None):
         self.dev = None
         self.mmc = None
@@ -88,11 +88,11 @@ class Device:
         if test != gold:
             print(test)
             print(gold)
-            #print("ERROR: Serial protocol mismatch")
+            # print("ERROR: Serial protocol mismatch")
             raise RuntimeError("ERROR: Serial protocol mismatch")
 
     def check_int(self, test, gold):
-        test = struct.unpack('>I', test)[0]
+        test = struct.unpack(">I", test)[0]
         self.check(test, gold)
 
     def _writeb(self, out_str):
@@ -102,20 +102,20 @@ class Device:
     def handshake(self):
         # look for start byte
         while True:
-            c = self._writeb(b'\xa0')
-            if c == b'\x5f':
+            c = self._writeb(b"\xa0")
+            if c == b"\x5f":
                 break
             self.dev.flushInput()
 
         # complete sequence
-        self.check(self._writeb(b'\x0a'), b'\xf5')
-        self.check(self._writeb(b'\x50'), b'\xaf')
-        self.check(self._writeb(b'\x05'), b'\xfa')
+        self.check(self._writeb(b"\x0a"), b"\xf5")
+        self.check(self._writeb(b"\x50"), b"\xaf")
+        self.check(self._writeb(b"\x05"), b"\xfa")
 
-    def handshake2(self, cmd='FACTFACT'):
+    def handshake2(self, cmd="FACTFACT"):
         # look for start byte
         c = 0
-        while c != b'Y':
+        while c != b"Y":
             c = self.dev.read()
         log("Preloader ready, sending " + cmd)
         command = str.encode(cmd)
@@ -125,22 +125,22 @@ class Device:
     def read32(self, addr, size=1):
         result = []
 
-        self.dev.write(b'\xd1')
-        self.check(self.dev.read(1), b'\xd1') # echo cmd
+        self.dev.write(b"\xd1")
+        self.check(self.dev.read(1), b"\xd1")  # echo cmd
 
-        self.dev.write(struct.pack('>I', addr))
-        self.check_int(self.dev.read(4), addr) # echo addr
+        self.dev.write(struct.pack(">I", addr))
+        self.check_int(self.dev.read(4), addr)  # echo addr
 
-        self.dev.write(struct.pack('>I', size))
-        self.check_int(self.dev.read(4), size) # echo size
+        self.dev.write(struct.pack(">I", size))
+        self.check_int(self.dev.read(4), size)  # echo size
 
-        self.check(self.dev.read(2), b'\x00\x00') # arg check
+        self.check(self.dev.read(2), b"\x00\x00")  # arg check
 
         for _ in range(size):
-            data = struct.unpack('>I', self.dev.read(4))[0]
+            data = struct.unpack(">I", self.dev.read(4))[0]
             result.append(data)
 
-        self.check(self.dev.read(2), b'\x00\x00') # status
+        self.check(self.dev.read(2), b"\x00\x00")  # status
 
         # support scalar
         if len(result) == 1:
@@ -151,29 +151,29 @@ class Device:
     def write32(self, addr, words, status_check=True):
         # support scalar
         if not isinstance(words, list):
-            words = [ words ]
+            words = [words]
 
-        self.dev.write(b'\xd4')
-        self.check(self.dev.read(1), b'\xd4') # echo cmd
+        self.dev.write(b"\xd4")
+        self.check(self.dev.read(1), b"\xd4")  # echo cmd
 
-        self.dev.write(struct.pack('>I', addr))
-        self.check_int(self.dev.read(4), addr) # echo addr
+        self.dev.write(struct.pack(">I", addr))
+        self.check_int(self.dev.read(4), addr)  # echo addr
 
-        self.dev.write(struct.pack('>I', len(words)))
-        self.check_int(self.dev.read(4), len(words)) # echo size
+        self.dev.write(struct.pack(">I", len(words)))
+        self.check_int(self.dev.read(4), len(words))  # echo size
 
-        self.check(self.dev.read(2), b'\x00\x00') # arg check
+        self.check(self.dev.read(2), b"\x00\x00")  # arg check
 
         for word in words:
-            self.dev.write(struct.pack('>I', word))
-            self.check_int(self.dev.read(4), word) # echo word
+            self.dev.write(struct.pack(">I", word))
+            self.check_int(self.dev.read(4), word)  # echo word
 
         if status_check:
-            self.check(self.dev.read(2), b'\x00\x00') # status
+            self.check(self.dev.read(2), b"\x00\x00")  # status
 
     def run_ext_cmd(self, cmd):
-        self.dev.write(b'\xC8')
-        self.check(self.dev.read(1), b'\xC8') # echo cmd
+        self.dev.write(b"\xC8")
+        self.check(self.dev.read(1), b"\xC8")  # echo cmd
         cmd = bytes([cmd])
         self.dev.write(cmd)
         self.check(self.dev.read(1), cmd)
@@ -187,7 +187,7 @@ class Device:
 
     def emmc_read(self, idx):
         # magic
-        self.dev.write(p32_be(0xf00dd00d))
+        self.dev.write(p32_be(0xF00DD00D))
         # cmd
         self.dev.write(p32_be(0x1000))
         # block to read
@@ -204,7 +204,7 @@ class Device:
             raise RuntimeError("data must be 0x200 bytes")
 
         # magic
-        self.dev.write(p32_be(0xf00dd00d))
+        self.dev.write(p32_be(0xF00DD00D))
         # cmd
         self.dev.write(p32_be(0x1001))
         # block to write
@@ -218,27 +218,26 @@ class Device:
 
     def emmc_switch(self, part):
         # magic
-        self.dev.write(p32_be(0xf00dd00d))
+        self.dev.write(p32_be(0xF00DD00D))
         # cmd
         self.dev.write(p32_be(0x1002))
         # partition
         self.dev.write(p32_be(part))
 
     def reboot(self):
-        # magic
-        self.dev.write(p32_be(0xf00dd00d))
-        # cmd
-        self.dev.write(p32_be(0x3000))        
+        self.write32(0x10000020, 0x1971)
+        self.write32(0x10000000, 0x22000014)
+        self.write32(0x10000014, 0x1209)
 
     def kick_watchdog(self):
         # magic
-        self.dev.write(p32_be(0xf00dd00d))
+        self.dev.write(p32_be(0xF00DD00D))
         # cmd
         self.dev.write(p32_be(0x3001))
 
     def rpmb_read(self):
         # magic
-        self.dev.write(p32_be(0xf00dd00d))
+        self.dev.write(p32_be(0xF00DD00D))
         # cmd
         self.dev.write(p32_be(0x2000))
 
@@ -253,7 +252,7 @@ class Device:
             raise RuntimeError("data must be 0x100 bytes")
 
         # magic
-        self.dev.write(p32_be(0xf00dd00d))
+        self.dev.write(p32_be(0xF00DD00D))
         # cmd
         self.dev.write(p32_be(0x2001))
         # data

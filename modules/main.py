@@ -7,14 +7,20 @@ import time
 
 from common import Device
 from handshake import handshake
-from load_payload import load_payload
 from logger import log
 from functions import *
-from gpt import parse_gpt_compat, generate_gpt, modify_step1, modify_step2, parse_gpt as gpt_parse_gpt
+from gpt import (
+    parse_gpt_compat,
+    generate_gpt,
+    modify_step1,
+    modify_step2,
+    parse_gpt as gpt_parse_gpt,
+)
 from mmc import Mmc
 
+
 def main():
-    # check_modemmanager()
+    check_modemmanager()
     dev = Device()
     dev.find_device()
 
@@ -36,8 +42,13 @@ def main():
 
     # 1.1) Parse gpt
     gpt, gpt_header, part_list = parse_gpt(dev)
-    #log("gpt_parsed = {}".format(gpt))
-    if "UBOOT" not in gpt or "TEE1" not in gpt or "boot" not in gpt or "recovery" not in gpt:
+    # log("gpt_parsed = {}".format(gpt))
+    if (
+        "UBOOT" not in gpt
+        or "TEE1" not in gpt
+        or "boot" not in gpt
+        or "recovery" not in gpt
+    ):
         raise RuntimeError("bad gpt")
 
     if "boot_x" not in gpt or "recovery_x" not in gpt:
@@ -58,10 +69,10 @@ def main():
         flash_data(dev, primary, 0)
 
         log("Flash new backup GPT")
-        flash_data(dev, backup, gpt_header['last_lba'] + 1)
+        flash_data(dev, backup, gpt_header["last_lba"] + 1)
 
         gpt, gpt_header, part_list = parse_gpt(dev)
-        #log("gpt_parsed = {}".format(gpt))
+        # log("gpt_parsed = {}".format(gpt))
         if "boot_x" not in gpt or "recovery_x" not in gpt:
             raise RuntimeError("bad gpt")
 
@@ -83,11 +94,21 @@ def main():
     log("Inject payload")
     switch_user(dev)
     flash_binary(dev, "../bin/boot.hdr", gpt["boot"][0], gpt["boot"][1] * 0x200)
-    flash_binary(dev, "../bin/boot.payload", gpt["boot"][0] + 60407, (gpt["boot"][1] * 0x200) - (60407 * 0x200))
-    
+    flash_binary(
+        dev,
+        "../bin/boot.payload",
+        gpt["boot"][0] + 60407,
+        (gpt["boot"][1] * 0x200) - (60407 * 0x200),
+    )
+
     switch_user(dev)
     flash_binary(dev, "../bin/boot.hdr", gpt["recovery"][0], gpt["recovery"][1] * 0x200)
-    flash_binary(dev, "../bin/boot.payload", gpt["recovery"][0] + 60407, (gpt["recovery"][1] * 0x200) - (60407 * 0x200))
+    flash_binary(
+        dev,
+        "../bin/boot.payload",
+        gpt["recovery"][0] + 60407,
+        (gpt["recovery"][1] * 0x200) - (60407 * 0x200),
+    )
 
     log("Force fastboot")
     force_fastboot(dev, gpt)
@@ -98,6 +119,7 @@ def main():
     # Reboot (to fastboot)
     log("Reboot to unlocked fastboot")
     dev.reboot()
+
 
 if __name__ == "__main__":
     main()

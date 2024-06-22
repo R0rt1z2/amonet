@@ -2,6 +2,7 @@
 import struct
 import sys
 
+
 def get_lk_version(filename):
     with open(filename, "rb") as lk:
         lk.seek(4)
@@ -12,23 +13,26 @@ def get_lk_version(filename):
         else:
             return 0xFFFF
 
+
 def get_tz_version(filename):
     with open(filename, "rb") as tz:
         tz.seek(8)
         if tz.read(3) == b"ATF":
-            tz.seek(0x20f)
+            tz.seek(0x20F)
             return struct.unpack(">H", tz.read(2))[0]
         else:
             return 0xFFFF
+
 
 def get_pl_version(filename):
     with open(filename, "rb") as pl:
         data = pl.read()
         offset = data.find(b"\x34\xb6\x12\x00\xbc\xbf\x12\x00")
         if offset > 0:
-            return int.from_bytes(data[offset + 8: offset + 9], "little")
+            return int.from_bytes(data[offset + 8 : offset + 9], "little")
         else:
             return 0xFFFF
+
 
 def main():
     if len(sys.argv) != 3:
@@ -41,6 +45,7 @@ def main():
             print(get_tz_version(sys.argv[2]))
         if sys.argv[1] == "pl":
             print(get_pl_version(sys.argv[2]))
+
 
 if __name__ == "__main__":
     main()
