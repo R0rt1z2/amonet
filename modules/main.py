@@ -13,40 +13,17 @@ from functions import *
 from gpt import parse_gpt_compat, generate_gpt, modify_step1, modify_step2, parse_gpt as gpt_parse_gpt
 
 def main():
-
-    minimal = False
-
     check_modemmanager()
-
     dev = Device()
     dev.find_device()
 
     # 0.1) Handshake
     handshake(dev)
 
-    skipwait = False
-    if (len(sys.argv) == 2 and sys.argv[1] == "skipwait") or (len(sys.argv) == 3 and sys.argv[2] == "skipwait") :
-        skipwait = True
-
-    # 0.2) Load brom payload
-    dev = load_payload(dev, "../brom-payload/build/payload.bin", skipwait)
-
-    # Clear preloader so, we get into bootrom without shorting, should the script stall (we flash preloader as last step)
-    # 0.3) Downgrade preloader
-    log("Clear preloader header")
-    switch_boot0(dev)
-    flash_data(dev, b"EMMC_BOOT" + b"\x00" * ((0x200 * 8) - 9), 0)
-
     if len(sys.argv) == 2 and sys.argv[1] == "fixgpt":
         dev.emmc_switch(0)
         log("Flashing GPT")
         flash_binary(dev, "../bin/gpt-sloane.bin", 0, 34 * 0x200)
-
-    if len(sys.argv) == 2 and sys.argv[1] == "minimal":
-        log("Running in minimal mode, assuming LK and TZ to have already been flashed.")
-        log("If this is correct (i.e. you used \"brick\" option in step 1) press enter, otherwise terminate with Ctrl+C")
-        input()
-        minimal = True
 
     # 1) Sanity check GPT
     log("Check GPT")
@@ -87,35 +64,17 @@ def main():
     log("Check boot0")
     switch_boot0(dev)
 
-    # 3) Sanity check rpmb
-    log("Check rpmb")
-    rpmb = dev.rpmb_read()
-    if rpmb[0:4] != b"AMZN":
-        log("rpmb looks broken; if this is expected (i.e. you're retrying the exploit) press enter, otherwise terminate with Ctrl+C")
-        input()
+    # 3) Flash TZ
+    log("Flash tz")
+    switch_user(dev)
+    flash_binary(dev, "../bin/tz.img", gpt["TEE1"][0], gpt["TEE1"][1] * 0x200)
 
-    # 4) Zero out rpmb to enable downgrade
-    log("Downgrade rpmb")
-    dev.rpmb_write(b"\x00" * 0x100)
-    log("Recheck rpmb")
-    rpmb = dev.rpmb_read()
-    if rpmb != b"\x00" * 0x100:
-        dev.reboot()
-        raise RuntimeError("downgrade failure, giving up")
-    log("rpmb downgrade ok")
+    # 4) Flash LK
+    log("Flash lk")
+    switch_user(dev)
+    flash_binary(dev, "../bin/lk.bin", gpt["lk"][0], gpt["lk"][1] * 0x200)
 
-    if not minimal:
-        # 7) Downgrade tz
-        log("Flash tz")
-        switch_user(dev)
-        flash_binary(dev, "../bin/tz.img", gpt["TEE1"][0], gpt["TEE1"][1] * 0x200)
-
-        # 8) Downgrade lk
-        log("Flash lk")
-        switch_user(dev)
-        flash_binary(dev, "../bin/lk.bin", gpt["lk"][0], gpt["lk"][1] * 0x200)
-
-    # 9) Flash payload
+    # 5) Flash payload
     log("Inject payload")
     switch_user(dev)
     flash_binary(dev, "../bin/boot.hdr", gpt["boot"][0], gpt["boot"][1] * 0x200)
@@ -128,20 +87,12 @@ def main():
     log("Force fastboot")
     force_fastboot(dev, gpt)
 
-    # Flash preloader as last step, so we still have access to bootrom, should the script stall
-    # 10) Downgrade preloader
-    log("Flash preloader")
-    switch_boot0(dev)
-    flash_binary(dev, "../bin/preloader.bin", 0)
-
-    # 10.1) Wait some time so data is flushed to EMMC
+    # 6) Wait some time so data is flushed to EMMC
     time.sleep(5)
 
     # Reboot (to fastboot)
     log("Reboot to unlocked fastboot")
     dev.reboot()
 
-
 if __name__ == "__main__":
     main()
-

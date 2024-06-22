@@ -1,4 +1,5 @@
 import struct
+import sys
 
 from common import CRYPTO_BASE, Device
 
@@ -101,12 +102,11 @@ def aes_write16(dev, addr, data):
     if call_func(dev, 126) != 0: # aes decrypt
         raise RuntimeError("failed to call the function!")
 
-def load_payload(dev, path, skipwait = False):
-    if not skipwait:
-        dev.dev.close()
-        dev = Device()
-        dev.find_device()
-        dev.handshake()
+def load_payload(dev, path):
+    dev.dev.close()
+    dev = Device()
+    dev.find_device()
+    dev.handshake()
 
     print("")
     print(" * * * Remove the short and press Enter * * * ")
