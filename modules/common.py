@@ -158,14 +158,14 @@ class Device:
         self.dev.write(struct.pack('>I', len(words)))
         self.check_int(self.dev.read(4), len(words)) # echo size
 
-        self.check(self.dev.read(2), b'\x00\x01') # arg check
+        self.check(self.dev.read(2), b'\x00\x00') # arg check
 
         for word in words:
             self.dev.write(struct.pack('>I', word))
             self.check_int(self.dev.read(4), word) # echo word
 
         if status_check:
-            self.check(self.dev.read(2), b'\x00\x01') # status
+            self.check(self.dev.read(2), b'\x00\x00') # status
 
     def run_ext_cmd(self, cmd):
         self.dev.write(b'\xC8')
