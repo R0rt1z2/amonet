@@ -36,8 +36,7 @@ def switch_boot0(dev):
         raise RuntimeError("what's wrong with your BOOT0?")
 
 def switch_boot1(dev):
-    dev.emmc_switch(2)
-    dev.kick_watchdog()
+    dev.mmc.set_part(2)
 
 
 def flash_data(dev, data, start_block, max_size=0):
@@ -101,6 +100,89 @@ def clear_flags(dev, gpt):
     block[0:32] = b"\x00" * 32
     dev.emmc_write(gpt["MISC"][0], bytes(block))
     block = dev.emmc_read(gpt["MISC"][0])
+
+
+def dump_partition(dev, gpt, name, output):
+    def get_partition_info(name):
+        special_parts = {
+            "boot0": 0x2000,
+            "preloader": 0x2000,
+            "boot1": 0x2000,
+            "idme": 0x2000,
+        }
+        return (
+            (0, special_parts[name])
+            if name.lower() in special_parts
+            else gpt.get(name)
+            or (
+                lambda: (_ for _ in ()).throw(
+                    RuntimeError("partition not found: {}".format(name))
+                )
+            )()
+        )
+
+    start_sector, sector_count = get_partition_info(name)
+    if name not in ["boot0", "preloader", "boot1", "idme"]:
+        start_address = start_sector + (
+            (dev.mmc.gpt_start - 0x200) // dev.mmc.block_size
+        )
+    else:
+        start_address = start_sector
+
+    with open(output, "wb") as fout:
+        for sector_index, sector in enumerate(
+            range(start_address, start_address + sector_count)
+        ):
+            block_data = dev.mmc.read_block(sector)
+            fout.write(block_data)
+            print("[{} / {}]".format(sector_index + 1, sector_count), end="\r")
+
+    print("")
+
+
+def flash_partition(dev, gpt, name, input):
+    def get_partition_info(name):
+        special_parts = {
+            "boot0": 0x2000,
+            "preloader": 0x2000,
+            "boot1": 0x2000,
+            "idme": 0x2000,
+        }
+        return (
+            (0, special_parts[name])
+            if name.lower() in special_parts
+            else gpt.get(name)
+            or (
+                lambda: (_ for _ in ()).throw(
+                    RuntimeError("partition not found: {}".format(name))
+                )
+            )()
+        )
+
+    start_sector, sector_count = get_partition_info(name)
+    start_address = (
+        start_sector + ((dev.mmc.gpt_start - 0x200) // dev.mmc.block_size)
+        if name.lower() not in ["boot0", "preloader", "boot1", "idme"]
+        else start_sector
+    )
+
+    with open(input, "rb") as fin:
+        data = fin.read()
+
+    if len(data) % 512 != 0:
+        data += b"\x00" * (512 - (len(data) % 512))
+
+    data_blocks = len(data) // 512
+
+    if data_blocks > sector_count:
+        raise RuntimeError("data too big to flash")
+
+    for sector_index in range(data_blocks):
+        sector = start_address + sector_index
+        dev.mmc.write_block(sector, data[sector_index * 512 : (sector_index + 1) * 512])
+        print("[{} / {}]".format(sector_index + 1, data_blocks), end="\r")
+
+    print("")
 
 
 def switch_user(dev):
