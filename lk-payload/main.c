@@ -23,8 +23,8 @@ void _putchar(char character)
     low_uart_put(character);
 }
 
-int (*original_read)(struct device_t *dev, uint64_t block_off, void *dst, size_t sz, int part) = (void*)0x41e04375;
-int (*app)() = (void*)0x41e3b111;
+int (*original_read)(struct device_t *dev, uint64_t block_off, void *dst, size_t sz, int part) = (void*)0x81e0a2c8;
+int (*app)() = (void*)0x81e3c640;
 
 uint64_t g_boot, g_boot_x, g_lk, g_misc, g_recovery, g_recovery_x;
 
@@ -83,7 +83,8 @@ int main() {
     cache_clean((void *)PAYLOAD_DST, PAYLOAD_SIZE);
 
     printf("This is LK-payload by xyz. Copyright 2019\n");
-    printf("Version for sloane by k4y0z and t0x1cSH. Copyright 2020\n");
+    printf("Original version for sloane by k4y0z and t0x1cSH. Copyright 2020\n");
+    printf("Ported to ariel ariel by R0rt1z2. Copyright 2024\n");
 
     int fastboot = 0;
 
@@ -101,11 +102,11 @@ int main() {
 
     // Restore the 0x41E00000-0x41E50000 range, a part of it was overwritten
     // this is way more than we actually need to restore, but it shouldn't hurt
-    dev->read(dev, g_lk * 0x200 + 0x200, (char*)LK_BASE, 0x50000, USER_PART); // +0x200 to skip lk header
+    // dev->read(dev, g_lk * 0x200 + 0x200, (char*)LK_BASE, 0x50000, USER_PART); // +0x200 to skip lk header
 
     // Restore argptr
-    uint32_t **argptr = (void*)0x41e00020;
-    *argptr = (void*)0x4207f288;
+    uint32_t **argptr = (void*)0x81e00020;
+    // *argptr = (void*)0x4207f288; TODO
 
     printf("g_boot_mode %u\n", *g_boot_mode);
     printf("f_boot_mode %u\n", *f_boot_mode);
@@ -149,9 +150,9 @@ int main() {
       // UART flag on MISC
       if(strncmp(bootloader_msg + 0x10, "UART_PLEASE", 11) == 0) {
         // Force uart enable
-        char* disable_uart = (char*)0x41e58758;
+        char* disable_uart = (char*)0x81e60934;
         strcpy(disable_uart, " printk.disable_uart=0");
-        char* disable_uart2 = (char*)0x41e58e84;
+        char* disable_uart2 = (char*)0x81e60fd0;
         strcpy(disable_uart2, "printk.disable_uart=0");
       }
 
@@ -167,24 +168,16 @@ int main() {
     // force fastboot mode
     if (fastboot) {
         printf("well since you're asking so nicely...\n");
-
-        video_printf("=> HACKED FASTBOOT mode: (%d) - xyz, k4y0z, t0x1cSH\n", *g_boot_mode);
-
-	*g_boot_mode = 99;
+        video_printf("=> HACKED FASTBOOT mode: (%d) - xyz, k4y0z, t0x1cSH, R0rt1z2\n", *g_boot_mode);
+	    *g_boot_mode = 99;
     }
     else if(*g_boot_mode == 2) {
       video_printf("=> RECOVERY mode...");
     }
 
     // device is unlocked
-    patch = (void*)0x41e42a64;
-    *patch++ = 0x2001; // movs r0, #1
-    *patch = 0x4770;   // bx lr
-
-    // amzn_verify_limited_unlock (to set androidboot.unlocked_kernel=true)
-    patch = (void*)0x41e3a244;
-    *patch++ = 0x2000; // movs r0, #0
-    *patch = 0x4770;   // bx lr
+    patch = (void*)0x41e800b4;
+    patch[0x16] = 0x1;
 
     //printf("(void*)dev->read 0x%08X\n", (void*)dev->read);
     //printf("(void*)&dev->read 0x%08X\n", (void*)&dev->read);
@@ -195,8 +188,8 @@ int main() {
 
     original_read = (void*)dev->read;
 
-    patch32 = (void*)0x41e688d0;
-    *patch32 = (uint32_t)read_func;
+    //patch32 = (void*)0x41e688d0; TODO
+    //*patch32 = (uint32_t)read_func;
 
     patch32 = (void*)&dev->read;
     *patch32 = (uint32_t)read_func;
@@ -206,9 +199,6 @@ int main() {
 
 #ifdef RELOAD_LK
     printf("About to jump to LK\n");
-    
-    uint32_t *arg = *argptr;
-    arg[0x53] = 4; // force 64-bit linux kernel
 
     asm volatile (
         "mov r4, %0\n" 

@@ -2,12 +2,12 @@
 import sys
 import struct
 
-base = 0x41E00000
-forced_addr = 0x40080000
+base = 0x81E00000
+forced_addr = 0x80208000
 
-page_size = 0x800 # sloane forces 0x800 bytes
+page_size = 0x800 # ariel forces 0x800 bytes
 
-patch_offset = 0x42948
+patch_offset = 0x6c444 + 12 # mt_part_dev->init_dev()
 
 shellcode_sz = 0x1000 # TODO: check size
 
