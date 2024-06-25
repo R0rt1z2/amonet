@@ -40,16 +40,16 @@ def switch_boot1(dev):
 
 
 def flash_data(dev, data, start_block, max_size=0):
-    while len(data) % 0x200 != 0:
-        data += b"\x00"
-
     if max_size and len(data) > max_size:
         raise RuntimeError("data too big to flash")
 
-    blocks = len(data) // 0x200
+    if len(data) % 512 != 0:
+        data += b"\x00" * (512 - (len(data) % 512))
+
+    blocks = len(data) // 512
     for x in range(blocks):
         print("[{} / {}]".format(x + 1, blocks), end="\r")
-        dev.emmc_write(start_block + x, data[x * 0x200 : (x + 1) * 0x200])
+        dev.mmc.write_block(start_block + x, data[x * 512 : (x + 1) * 512])
     print("")
 
 
@@ -124,7 +124,7 @@ def dump_partition(dev, gpt, name, output):
     start_sector, sector_count = get_partition_info(name)
     if name not in ["boot0", "preloader", "boot1", "idme"]:
         start_address = start_sector + (
-            (dev.mmc.gpt_start - 0x200) // dev.mmc.block_size
+                dev.mmc.gpt_start // dev.mmc.block_size
         )
     else:
         start_address = start_sector
@@ -161,7 +161,7 @@ def flash_partition(dev, gpt, name, input):
 
     start_sector, sector_count = get_partition_info(name)
     start_address = (
-        start_sector + ((dev.mmc.gpt_start - 0x200) // dev.mmc.block_size)
+        start_sector + (dev.mmc.gpt_start // dev.mmc.block_size)
         if name.lower() not in ["boot0", "preloader", "boot1", "idme"]
         else start_sector
     )
@@ -184,19 +184,18 @@ def flash_partition(dev, gpt, name, input):
 
     print("")
 
-
 def switch_user(dev):
     dev.mmc.set_part(0)
     for i in [0x0A00000, 0x0400000, 0x0780000]:
         block = dev.mmc.read_block(i // 0x200)
         if block[510:512] == b"\x55\xAA":
-            return dev.mmc.set_gpt_start(i + 0x200)
+            return dev.mmc.set_gpt_start(i)
 
     raise RuntimeError("what's wrong with your GPT?")
 
 
 def parse_gpt(dev):
-    start = dev.mmc.gpt_start
+    start = dev.mmc.gpt_start + 0x200
     data = (
         dev.mmc.read_block((start + 0x200) // 0x200)
         + dev.mmc.read_block((start + 0x400) // 0x200)

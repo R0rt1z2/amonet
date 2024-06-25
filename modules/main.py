@@ -66,10 +66,14 @@ def main():
         gpt_header, part_list = gpt_parse_gpt(bytes(primary))
 
         log("Flash new primary GPT")
-        flash_data(dev, primary, 0)
+        flash_data(dev, primary, dev.mmc.gpt_start // dev.mmc.block_size)
 
         log("Flash new backup GPT")
-        flash_data(dev, backup, gpt_header["last_lba"] + 1)
+        flash_data(
+            dev,
+            backup,
+            (gpt_header["last_lba"] + 1) + (dev.mmc.gpt_start // dev.mmc.block_size),
+        )
 
         gpt, gpt_header, part_list = parse_gpt(dev)
         # log("gpt_parsed = {}".format(gpt))
@@ -83,12 +87,12 @@ def main():
     # 3) Flash TZ
     log("Flash tz")
     switch_user(dev)
-    flash_binary(dev, "../bin/tz.img", gpt["TEE1"][0], gpt["TEE1"][1] * 0x200)
+    flash_partition(dev, gpt, "TEE1", "../bin/tz.img")
 
     # 4) Flash LK
     log("Flash lk")
     switch_user(dev)
-    flash_binary(dev, "../bin/lk.bin", gpt["lk"][0], gpt["lk"][1] * 0x200)
+    flash_partition(dev, gpt, "UBOOT", "../bin/lk.bin")
 
     # 5) Flash payload
     log("Inject payload")
