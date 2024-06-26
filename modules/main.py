@@ -97,22 +97,15 @@ def main():
     # 5) Flash payload
     log("Inject payload")
     switch_user(dev)
-    flash_binary(dev, "../bin/boot.hdr", gpt["boot"][0], gpt["boot"][1] * 0x200)
-    flash_binary(
-        dev,
-        "../bin/boot.payload",
-        gpt["boot"][0] + 60407,
-        (gpt["boot"][1] * 0x200) - (60407 * 0x200),
-    )
+    flash_binary(dev, "../bin/boot.hdr", gpt["boot"][0] + (dev.mmc.gpt_start // dev.mmc.block_size), gpt["boot"][1] * 0x200)
+    flash_binary(dev,"../bin/boot.payload", (gpt["boot"][0] + 57271) + (dev.mmc.gpt_start // dev.mmc.block_size),
+                 (gpt["boot"][1] * 0x200) - (57271 * 0x200))
 
     switch_user(dev)
-    flash_binary(dev, "../bin/boot.hdr", gpt["recovery"][0], gpt["recovery"][1] * 0x200)
-    flash_binary(
-        dev,
-        "../bin/boot.payload",
-        gpt["recovery"][0] + 60407,
-        (gpt["recovery"][1] * 0x200) - (60407 * 0x200),
-    )
+    flash_binary(dev, "../bin/boot.hdr", gpt["recovery"][0] + (dev.mmc.gpt_start // dev.mmc.block_size), gpt["recovery"][1] * 0x200)
+    flash_binary(dev,"../bin/boot.payload", (gpt["recovery"][0] + 57271) + (dev.mmc.gpt_start // dev.mmc.block_size),
+                 (gpt["recovery"][1] * 0x200) - (57271 * 0x200))
+
 
     log("Force fastboot")
     force_fastboot(dev, gpt)
