@@ -12,6 +12,8 @@ struct device_t {
 struct device_t* (*get_device)() = (void*)0x81e0a700;
 void (*cache_clean)(void *addr, size_t sz) = (void*)0x81e1d1a4;
 size_t (*video_printf)(const char *format, ...) = (void *)0x81e3e5ac;
+size_t (*dprintf)(const char *format, ...) = (void *)0x81e3e7f4;
+
 
 uint32_t* f_boot_mode = (uint32_t*) 0x81e81450;
 uint32_t* g_boot_mode = (uint32_t*) 0x81e6c414;

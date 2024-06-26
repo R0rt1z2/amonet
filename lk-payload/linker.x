@@ -7,7 +7,7 @@ SECTIONS
 {
   . = 0x81dff000;
 
-  .text     : { *(.text.start) *(.text   .text.*   .gnu.linkonce.t.*) }
+  .text     : { *(.text.start)  *(.text.main) *(.text   .text.*   .gnu.linkonce.t.*) }
   .rodata   : { *(.rodata .rodata.* .gnu.linkonce.r.*) }
   .data     : { *(.data   .data.*   .gnu.linkonce.d.*) }
   .bss      : { *(.bss    .bss.*    .gnu.linkonce.b.*) *(COMMON) }

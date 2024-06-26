@@ -7,8 +7,8 @@
 //#define RELOAD_LK
 
 void low_uart_put(int ch) {
-    volatile uint32_t *uart_reg0 = (volatile uint32_t*)0x11002014;
-    volatile uint32_t *uart_reg1 = (volatile uint32_t*)0x11002000;
+    volatile uint32_t *uart_reg0 = (volatile uint32_t*)0x11009014;
+    volatile uint32_t *uart_reg1 = (volatile uint32_t*)0x11009000;
 
     while ( !((*uart_reg0) & 0x20) )
     {}
@@ -77,14 +77,17 @@ static void parse_gpt() {
     }
 }
 
-int main() {
+__attribute__((section(".text.start"))) int main() {
     int ret = 0;
     // We need to clean the cache first, since we jumped straight to the payload
-    cache_clean((void *)PAYLOAD_DST, PAYLOAD_SIZE);
+    //cache_clean((void *)PAYLOAD_DST, PAYLOAD_SIZE);
 
+    //dprintf("Hello from payload!\n");
     printf("This is LK-payload by xyz. Copyright 2019\n");
     printf("Original version for sloane by k4y0z and t0x1cSH. Copyright 2020\n");
     printf("Ported to ariel ariel by R0rt1z2. Copyright 2024\n");
+
+    while (1) {}
 
     int fastboot = 0;
 

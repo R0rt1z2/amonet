@@ -7,9 +7,9 @@ forced_addr = 0x80208000
 
 page_size = 0x800 # ariel forces 0x800 bytes
 
-test = 0x81e1c824 # prints "Error, the pointer of pidme_data is NULL."
+test = 0x81e1eddc # prints "Error, the pointer of pidme_data is NULL."
 
-patch_offset = 0x81e3b286 - base
+patch_offset = 0x81e1d7fc - base
 
 shellcode_sz = 0x1000 # TODO: check size
 
@@ -25,20 +25,16 @@ if kernel_size % page_size != 0:
     kernel_size = ((kernel_size // page_size) + 1) * page_size
 boot_size = kernel_size + (2 * page_size)
 
-def encode_blx(src, dst):
-    # See http://pank4j.github.io/posts/assembling-from-scratch-encoding-blx-instruction-in-arm-thumb.html
-    offset = dst - ((src + 4) & 0xFFFFFFFC)
+def encode_bl(src, dst):
+    offset = (dst - (src + 4)) // 2
 
-    s = ((offset >> 24) & 0x1)
-    i1 = ((offset >> 16) & 0x80) >> 7
-    i2 = ((offset >> 16) & 0x40) >> 6
-    h = (offset & 0x3FF000) << 4
-    l = (offset & 0xFFC) >> 1
-    j1 = (1 - i1) ^ s
-    j2 = (1 - i2) ^ s
+    high = (offset >> 11) & 0x7FF  # Upper 11 bits
+    low = offset & 0x7FF  # Lower 11 bits
 
-    result = 0xF000C000 | (s << 26) | h | (j1 << 13) | (j2 << 11) | l
-    return struct.pack("<HH", result  >> 16, result & 0xFFFF)
+    high_halfword = 0xF800 | high
+    low_halfword = 0xF000 | low
+
+    return struct.pack("<HH", high_halfword, low_halfword)
 
 def main():
     if len(sys.argv) < 2:
@@ -72,8 +68,8 @@ def main():
     hdr += b"\x00" * (lk_offset + page_size - len(hdr) - 0x200)
 
     hdr += orig[:patch_offset + 0x200]
-    hdr += bytes.fromhex("60 b1")
-    hdr += orig[patch_offset + 0x200 + 2:]
+    hdr += bytes.fromhex('e1 f7 00 fc')
+    hdr += orig[patch_offset + 0x200 + 4:]
 
     payload_block = (inject_offset // 0x200)
     print("Payload Address: " + hex(shellcode_addr))
