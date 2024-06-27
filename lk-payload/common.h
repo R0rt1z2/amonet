@@ -1,19 +1,38 @@
 #pragma once
 
-struct device_t {
-    uint32_t unk1;
-    uint32_t unk2;
-    uint32_t unk3;
-    uint32_t unk4;
-    size_t (*read)(struct device_t *dev, uint64_t dev_addr, void *dst, uint32_t size, uint32_t part);
-    size_t (*write)(struct device_t *dev, void *src, uint64_t block_off, size_t size, uint32_t part);
+#define BLK_BITS         (9)
+#define BLK_SIZE         (1 << BLK_BITS)
+#define BLK_NUM(size)    ((unsigned long long)(size) / BLK_SIZE)
+
+typedef struct block_dev_desc {
+    int             dev;
+    unsigned long   lba;
+    unsigned long   blksz;
+    unsigned long   (*block_read)(int dev,
+                                  unsigned long start,
+                                  unsigned long blkcnt,
+                                  void *buffer);
+    unsigned long   (*block_write)(int dev,
+                                   unsigned long start,
+                                   unsigned long blkcnt,
+                                   const void *buffer);
+} block_dev_desc_t;
+
+typedef struct part_dev part_dev_t;
+
+struct part_dev {
+    int init;
+    int id;
+    block_dev_desc_t *blkdev;
+    int (*init_dev) (int id);
+    int (*read)     (part_dev_t *dev, uint64_t src, unsigned char *dst, int size);
+    int (*write)    (part_dev_t *dev, unsigned char *src, uint64_t dst, int size);
 };
 
-struct device_t* (*get_device)() = (void*)0x81e0a700;
+part_dev_t* (*get_device)() = (void*)(0x81e0a700|1);
+size_t (*mmc_read)(uint64_t data_addr, uint32_t *out, uint32_t data_len) = (void*)(0x81e0b278|1);
 void (*cache_clean)(void *addr, size_t sz) = (void*)0x81e1d1a4;
-size_t (*video_printf)(const char *format, ...) = (void *)0x81e3e5ac;
-size_t (*dprintf)(const char *format, ...) = (void *)0x81e3e7f4;
-
+size_t (*video_printf)(const char *format, ...) = (void *)(0x81e3e5ac|1);
 
 uint32_t* f_boot_mode = (uint32_t*) 0x81e81450;
 uint32_t* g_boot_mode = (uint32_t*) 0x81e6c414;
@@ -24,6 +43,3 @@ uint32_t* g_boot_mode = (uint32_t*) 0x81e6c414;
 
 #define LK_BASE 0x81E00000
 #define LK_SIZE (0x800 * 0x200)
-
-#define BOOT0_PART 1
-#define USER_PART 8
