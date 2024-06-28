@@ -8,6 +8,7 @@ from common import Device
 from logger import log
 from gpt import parse_gpt_compat
 
+
 def check_modemmanager():
     pids = [pid for pid in os.listdir("/proc") if pid.isdigit()]
 
@@ -35,6 +36,7 @@ def switch_boot0(dev):
         dev.reboot()
         raise RuntimeError("what's wrong with your BOOT0?")
 
+
 def switch_boot1(dev):
     dev.mmc.set_part(2)
 
@@ -59,7 +61,7 @@ def flash_binary(dev, path, start_block, max_size=0):
     while len(data) % 0x200 != 0:
         data += b"\x00"
 
-    flash_data(dev, data, start_block, max_size=0)
+    flash_data(dev, data, start_block, max_size=max_size)
 
 
 def dump_binary(dev, path, start, size):
@@ -72,34 +74,58 @@ def dump_binary(dev, path, start, size):
 
 def force_fastboot(dev, gpt):
     switch_user(dev)
-    block = list(dev.emmc_read(gpt["MISC"][0]))
+    block = list(
+        dev.mmc.read_block(gpt["MISC"][0] + (dev.mmc.gpt_start // dev.mmc.block_size))
+    )
     block[0:16] = "FASTBOOT_PLEASE\x00".encode("utf-8")
-    dev.emmc_write(gpt["MISC"][0], bytes(block))
-    block = dev.emmc_read(gpt["MISC"][0])
+    dev.mmc.write_block(
+        gpt["MISC"][0] + (dev.mmc.gpt_start // dev.mmc.block_size), bytes(block)
+    )
 
 
 def temp_fastboot(dev, gpt):
     switch_user(dev)
-    block = list(dev.emmc_read(gpt["MISC"][0]))
+    block = list(
+        dev.mmc.read_block(gpt["MISC"][0] + (dev.mmc.gpt_start // dev.mmc.block_size))
+    )
     block[0:16] = "boot-amonet\x00\x00\x00\x00\x00".encode("utf-8")
-    dev.emmc_write(gpt["MISC"][0], bytes(block))
-    block = dev.emmc_read(gpt["MISC"][0])
+    dev.mmc.write_block(
+        gpt["MISC"][0] + (dev.mmc.gpt_start // dev.mmc.block_size), bytes(block)
+    )
+    block = dev.mmc.read_block(
+        gpt["MISC"][0] + (dev.mmc.gpt_start // dev.mmc.block_size)
+    )
+    print(block)
 
 
 def force_recovery(dev, gpt):
     switch_user(dev)
-    block = list(dev.emmc_read(gpt["MISC"][0]))
+    block = list(
+        dev.mmc.read_block(gpt["MISC"][0] + (dev.mmc.gpt_start // dev.mmc.block_size))
+    )
     block[0:16] = "boot-recovery\x00\x00\x00".encode("utf-8")
-    dev.emmc_write(gpt["MISC"][0], bytes(block))
-    block = dev.emmc_read(gpt["MISC"][0])
+    dev.mmc.write_block(
+        gpt["MISC"][0] + (dev.mmc.gpt_start // dev.mmc.block_size), bytes(block)
+    )
+    block = dev.mmc.read_block(
+        gpt["MISC"][0] + (dev.mmc.gpt_start // dev.mmc.block_size)
+    )
+    print(block)
 
 
 def clear_flags(dev, gpt):
     switch_user(dev)
-    block = list(dev.emmc_read(gpt["MISC"][0]))
+    block = list(
+        dev.mmc.read_block(gpt["MISC"][0] + (dev.mmc.gpt_start // dev.mmc.block_size))
+    )
     block[0:32] = b"\x00" * 32
-    dev.emmc_write(gpt["MISC"][0], bytes(block))
-    block = dev.emmc_read(gpt["MISC"][0])
+    dev.mmc.write_block(
+        gpt["MISC"][0] + (dev.mmc.gpt_start // dev.mmc.block_size), bytes(block)
+    )
+    block = dev.mmc.read_block(
+        gpt["MISC"][0] + (dev.mmc.gpt_start // dev.mmc.block_size)
+    )
+    print(block)
 
 
 def dump_partition(dev, gpt, name, output):
@@ -123,9 +149,7 @@ def dump_partition(dev, gpt, name, output):
 
     start_sector, sector_count = get_partition_info(name)
     if name not in ["boot0", "preloader", "boot1", "idme"]:
-        start_address = start_sector + (
-                dev.mmc.gpt_start // dev.mmc.block_size
-        )
+        start_address = start_sector + (dev.mmc.gpt_start // dev.mmc.block_size)
     else:
         start_address = start_sector
 
@@ -183,6 +207,7 @@ def flash_partition(dev, gpt, name, input):
         print("[{} / {}]".format(sector_index + 1, data_blocks), end="\r")
 
     print("")
+
 
 def switch_user(dev):
     dev.mmc.set_part(0)

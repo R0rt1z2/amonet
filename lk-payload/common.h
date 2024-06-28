@@ -30,7 +30,6 @@ struct part_dev {
 };
 
 part_dev_t* (*get_device)() = (void*)(0x81e0a700|1);
-size_t (*mmc_read)(uint64_t data_addr, uint32_t *out, uint32_t data_len) = (void*)(0x81e0b278|1);
 void (*cache_clean)(void *addr, size_t sz) = (void*)0x81e1d1a4;
 size_t (*video_printf)(const char *format, ...) = (void *)(0x81e3e5ac|1);
 

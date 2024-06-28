@@ -5,6 +5,8 @@ import os
 import sys
 import time
 
+from argparse import ArgumentParser
+
 from common import Device
 from handshake import handshake
 from logger import log
@@ -19,22 +21,23 @@ from gpt import (
 from mmc import Mmc
 
 
-def main():
+def main(dev, args):
     check_modemmanager()
-    dev = Device()
     dev.find_device()
 
     # 0.1) Handshake
-    handshake(dev)
+    handshake(dev, args.skip_handshake)
 
     # 0.2) Initialize eMMC
     log("Init emmc")
     dev.set_mmc(Mmc(dev, 0x11230000))
 
-    if len(sys.argv) == 2 and sys.argv[1] == "fixgpt":
-        dev.emmc_switch(0)
+    if args.gptfix:
+        switch_user(dev)
         log("Flashing GPT")
-        flash_binary(dev, "../bin/gpt-sloane.bin", 0, 34 * 0x200)
+        flash_binary(
+            dev, "../bin/gpt-ariel.bin", dev.mmc.gpt_start // dev.mmc.block_size
+        )
 
     # 1) Sanity check GPT
     log("Check GPT")
@@ -46,10 +49,23 @@ def main():
     if (
         "UBOOT" not in gpt
         or "TEE1" not in gpt
+        or "TEE2" not in gpt
         or "boot" not in gpt
         or "recovery" not in gpt
     ):
         raise RuntimeError("bad gpt")
+
+    if args.image:
+        log("Flash {}".format(args.partition))
+        flash_partition(
+            dev,
+            gpt,
+            args.partition,
+            os.path.abspath(args.image).replace("modules/", ""),
+        )
+
+        log("Reboot")
+        return dev.reboot()
 
     if "boot_x" not in gpt or "recovery_x" not in gpt:
         log("Modify GPT")
@@ -84,10 +100,19 @@ def main():
     log("Check boot0")
     switch_boot0(dev)
 
-    # 3) Flash TZ
-    log("Flash tz")
+    # 3) Downgrade preloader
+    log("Flash preloader")
     switch_user(dev)
-    flash_partition(dev, gpt, "TEE1", "../bin/tz.img")
+    flash_binary(
+        dev,
+        "../bin/preloader.bin",
+        (gpt["TEE2"][0] + 0x300000) + (dev.mmc.gpt_start // dev.mmc.block_size),
+    )
+    flash_binary(
+        dev,
+        "../bin/preloader.bin",
+        (gpt["TEE1"][0] + 0x300000) + (dev.mmc.gpt_start // dev.mmc.block_size),
+    )
 
     # 4) Flash LK
     log("Flash lk")
@@ -97,15 +122,32 @@ def main():
     # 5) Flash payload
     log("Inject payload")
     switch_user(dev)
-    flash_binary(dev, "../bin/boot.hdr", gpt["boot"][0] + (dev.mmc.gpt_start // dev.mmc.block_size), gpt["boot"][1] * 0x200)
-    flash_binary(dev,"../bin/boot.payload", (gpt["boot"][0] + 57271) + (dev.mmc.gpt_start // dev.mmc.block_size),
-                 (gpt["boot"][1] * 0x200) - (57271 * 0x200))
+    flash_binary(
+        dev,
+        "../bin/boot.hdr",
+        gpt["boot"][0] + (dev.mmc.gpt_start // dev.mmc.block_size),
+        gpt["boot"][1] * 0x200,
+    )
+    flash_binary(
+        dev,
+        "../bin/boot.payload",
+        (gpt["boot"][0] + 57271) + (dev.mmc.gpt_start // dev.mmc.block_size),
+        (gpt["boot"][1] * 0x200) - (57271 * 0x200),
+    )
 
     switch_user(dev)
-    flash_binary(dev, "../bin/boot.hdr", gpt["recovery"][0] + (dev.mmc.gpt_start // dev.mmc.block_size), gpt["recovery"][1] * 0x200)
-    flash_binary(dev,"../bin/boot.payload", (gpt["recovery"][0] + 57271) + (dev.mmc.gpt_start // dev.mmc.block_size),
-                 (gpt["recovery"][1] * 0x200) - (57271 * 0x200))
-
+    flash_binary(
+        dev,
+        "../bin/boot.hdr",
+        gpt["recovery"][0] + (dev.mmc.gpt_start // dev.mmc.block_size),
+        gpt["recovery"][1] * 0x200,
+    )
+    flash_binary(
+        dev,
+        "../bin/boot.payload",
+        (gpt["recovery"][0] + 57271) + (dev.mmc.gpt_start // dev.mmc.block_size),
+        (gpt["recovery"][1] * 0x200) - (57271 * 0x200),
+    )
 
     log("Force fastboot")
     force_fastboot(dev, gpt)
@@ -119,4 +161,26 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    arg_parser = ArgumentParser()
+    arg_parser.add_argument("--port", type=str, default=None, help="Serial port")
+    arg_parser.add_argument(
+        "--skip-handshake",
+        "-s",
+        action="store_true",
+        default=False,
+        help="Skip handshake",
+    )
+    arg_parser.add_argument(
+        "--partition", "-p", type=str, help="Partition name to flash"
+    )
+    arg_parser.add_argument(
+        "--image", "-f", type=str, help="Image file to flash to the partition"
+    )
+    arg_parser.add_argument("--gptfix", "-g", action="store_true", help="Fix GPT")
+    args = arg_parser.parse_args()
+
+    if args.image and not args.partition:
+        arg_parser.error("--partition is required when --image is provided")
+
+    dev = Device(args.port)
+    main(dev, args)

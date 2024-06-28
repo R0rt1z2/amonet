@@ -80,7 +80,8 @@ int read_func(part_dev_t *dev, uint64_t block_off, void *dst, uint32_t sz) {
 
 static void parse_gpt() {
     uint8_t raw[0x1000] = { 0 };
-    mmc_read(0x0, (uint32_t *)raw, sizeof(raw));
+    part_dev_t *dev = get_device();
+    dev->read(dev, 0x400 + 0x1000000, raw, sizeof(raw));
 
     for (int i = 0; i < sizeof(raw) / 0x80; ++i) {
         uint8_t *ptr = &raw[i * 0x80];
@@ -133,6 +134,10 @@ __attribute__((section(".text.start"))) int main() {
 
     part_dev_t *dev = get_device();
 
+    // Restore the 0x81E00000-0x81E50000 range, a part of it was overwritten
+    // this is way more than we actually need to restore, but it shouldn't hurt
+    dev->read(dev, ((g_lk * 0x200) + 0x200) + 0x1000000, (char*)LK_BASE, 0x50000); // +0x200 to skip lk header
+
     // Restore argptr
     uint32_t **argptr = (void*)0x81e00020;
 
@@ -151,16 +156,23 @@ __attribute__((section(".text.start"))) int main() {
 
     else if(g_misc) {
       // Read amonet-flag from MISC partition
-      //dev->read(dev, g_misc * 0x200, bootloader_msg, 0x20);
-      //dev->read(dev, g_misc * 0x200 + 0x4000, bootloader_msg, 0x10, USER_PART);
-      //printf("bootloader_msg: %s\n", bootloader_msg);
+      dev->read(dev, (g_misc * 0x200) + 0x1000000, bootloader_msg, 0x50);
+      printf("bootloader_msg: %s\n", bootloader_msg);
 
       // temp flag on MISC
       if(strncmp(bootloader_msg, "boot-amonet", 11) == 0) {
         fastboot = 1;
         // reset flag
         memset(bootloader_msg, 0, 0x10);
-        //dev->write(dev, bootloader_msg, g_misc * 0x200, 0x10);
+        dev->write(dev, bootloader_msg, (g_misc * 0x200) + 0x1000000, 0x10);
+      }
+
+      // recovery flag on MISC
+      else if(strncmp(bootloader_msg, "boot-recovery", 13) == 0) {
+        *g_boot_mode = 2;
+        // reset flag
+        memset(bootloader_msg, 0, 0x10);
+        dev->write(dev, bootloader_msg, (g_misc * 0x200) + 0x1000000, 0x10);
       }
 
       // perm flag on MISC
@@ -168,7 +180,7 @@ __attribute__((section(".text.start"))) int main() {
         // only reset flag in recovery-boot
         if(*g_boot_mode == 2) {
           memset(bootloader_msg, 0, 0x10);
-          //dev->write(dev, bootloader_msg, g_misc * 0x200, 0x10);
+          dev->write(dev, bootloader_msg, (g_misc * 0x200) + 0x1000000, 0x50);
         }
         else {
           fastboot = 1;

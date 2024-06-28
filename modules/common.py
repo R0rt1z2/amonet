@@ -55,12 +55,15 @@ class Device:
         if port:
             self.dev = serial.Serial(port, BAUD, timeout=TIMEOUT)
 
+    def add_device(self, port):
+        self.dev = serial.Serial(port, BAUD)
+
     def set_mmc(self, mmc):
         self.mmc = mmc
 
     def find_device(self):
         if self.dev:
-            raise RuntimeError("Device already found")
+            return log("Device already found")
 
         log("Waiting for preloader")
         vid = "0E8D"
