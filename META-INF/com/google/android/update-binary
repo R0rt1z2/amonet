@@ -4,14 +4,10 @@
 
 PART_PREFIX=/dev/block/platform/mtk-msdc.0/by-name
 
-PAYLOAD_BLOCK=60407
-BOOT_OFFSET=3171616
-RECOVERY_OFFSET=3233056
-USERDATA_OFFSET=3294496
-
-max_pl=4
-max_lk=2
-max_tz=261
+PAYLOAD_BLOCK=57271
+BOOT_OFFSET=4362240
+RECOVERY_OFFSET=4423680
+USERDATA_OFFSET=4485120
 
 # detect whether in boot mode
 getprop | grep zygote | grep -q running && bootMode=true || bootMode=false
@@ -53,41 +49,14 @@ check_product() {
   fi
 }
 
-get_lk_version() {
-	LK=$1
-	if [ "$(dd if=${LK} bs=1 skip=8 count=2 2>/dev/null)" == "LK" ]; then
-		size=$(dd if=${LK} bs=1 skip=4 count=4 2>/dev/null| od -bI | awk 'NR==2')
-		offset=$(($size + 0x200 - 0x102))
-		version=0x$(dd if=${LK} bs=1 skip=$offset count=2 2>/dev/null| od -bx | awk 'NR==2' | awk '{$1=$1};1')
-		version=$(( (version<<8 & 0xff00) | (version>>8 & 0x00ff) ))
-	else
-		version=$((0xFFFF))
-	fi
-	echo $version
-}
+check_recovery() {
+  user=$(grep_prop ro.build.user)
 
-get_tz_version() {
-	TZ=$1
-	if [ "$(dd if=${TZ} bs=1 skip=8 count=3 2>/dev/null)" == "ATF" ]; then
-		version=0x$(dd if=${TZ} bs=1 skip=$((0x20f)) count=2 2>/dev/null| od -bx | awk 'NR==2' | awk '{$1=$1};1')
-		version=$(( (version<<8 &0xff00) | (version>>8 & 0x00ff) ))
-	else
-		version=$((0xFFFF))
-	fi
-	echo $version
+  if [ "$user" != "r0rt1z2" ] ; then
+    ui_print "Unsupported recovery, please install the correct TWRP first"
+    exit 1
+  fi
 }
-
-get_pl_version() {
-	PL=$1
-	hexdump -ve '1/1 ":%.2x"' $PL| grep "34:b6:12:00:bc:bf:12:00" >/dev/null 2>&1
-	if [ $? -eq 0 ]; then
-		version=$((0x$(hexdump -ve '1/1 ":%.2x"' $PL| sed "s/34:b6:12:00:bc:bf:12:00:\([0-9a-f]\{2\}\).*/\1/g" | awk -F ":" '{print $NF}')))
-	else
-		version=$((0xFFFF))
-	fi
-	echo $version
-}
-
 
 ##########################################################################################
 # Flashable update-binary preparation
@@ -115,7 +84,9 @@ if [ "$?" -eq "0" ]; then
   done
 fi
 
-check_product "sloane" " - Amazon Fire TV (2nd generation) - "
+check_product "ariel" " - Amazon Fire HD6 / HD7 (4th generation) - "
+
+check_recovery
 
 TMPDIR=/dev/tmp
 INSTALLER=$TMPDIR/install
@@ -124,28 +95,28 @@ INSTALLER=$TMPDIR/install
 rm -rf $TMPDIR 2>/dev/null
 mkdir -p $INSTALLER 2>/dev/null
 
-unzip -o "$ZIP" 'amonet/bin/lk.bin' 'amonet/bin/tz.img' 'amonet/bin/preloader.bin' 'amonet/bin/twrp.img' 'amonet/bin/boot.hdr' 'amonet/bin/boot.payload' 'amonet/bin/gpt-sloane-amonet.bin' -d $INSTALLER >&2
+unzip -o "$ZIP" 'amonet/bin/lk.bin' 'amonet/bin/tz.img' 'amonet/bin/preloader.bin' 'amonet/bin/twrp.img' 'amonet/bin/boot.hdr' 'amonet/bin/boot.payload' 'amonet/bin/gpt-ariel-amonet.bin' -d $INSTALLER >&2
 
 ##########################################################################################
 # Main
 ##########################################################################################
 
 ui_print " "
-ui_print "amonet installer for sloane"
+ui_print "amonet installer for ariel"
 
 # Check if gpt is already modified
-dd if=/dev/block/mmcblk0 bs=512 count=34 2> /dev/null | grep boot_x > /dev/null
+GPT_DATA=$(dd if=/dev/block/mmcblk0 bs=512 count=34 2> /dev/null)
+echo "$GPT_DATA" | grep -q boot_x
 if [ $? -eq 0 ] ; then
-	UPDATE=1
 	ui_print "GPT is already modified, updating amonet..."
 else
-	dd if=/dev/block/mmcblk0 bs=512 count=34 2> /dev/null | grep boot_tmp > /dev/null
+  echo "$GPT_DATA" | grep -q boot_tmp
 	if [ $? -eq 0 ] ; then
 		ui_print "Partially modified GPT detected, forcing reinstall..."
 	fi
 fi
 
-if [ -L $PART_PREFIX/lk_real ] ; then
+if [ -L $PART_PREFIX/UBOOT_real ] ; then
 	REAL_SUFFIX=_real
 fi
 
@@ -154,35 +125,29 @@ if [ -L $PART_PREFIX/boot_amonet ] ; then
 fi
 
 if [ $UPDATE ] ; then
-
 	ui_print "- updating TWRP"
 	dd if=${INSTALLER}/amonet/bin/twrp.img of=${PART_PREFIX}/recovery_x
 	ui_print "- updating LK"
-	dd if=${INSTALLER}/amonet/bin/lk.bin of=${PART_PREFIX}/lk${REAL_SUFFIX} bs=512 
+	dd if=${INSTALLER}/amonet/bin/lk.bin of=${PART_PREFIX}/lk${REAL_SUFFIX} bs=512
 	ui_print "- updating TZ"
-	dd if=${INSTALLER}/amonet/bin/tz.img of=${PART_PREFIX}/TEE1${REAL_SUFFIX} bs=512 
-	dd if=${INSTALLER}/amonet/bin/tz.img of=${PART_PREFIX}/TEE2${REAL_SUFFIX} bs=512 
-	ui_print "- updating PL"
-	echo 0 > /sys/block/mmcblk0boot0/force_ro
-	dd if=${INSTALLER}/amonet/bin/preloader.bin of=/dev/block/mmcblk0boot0 bs=512 
-	echo 1 > /sys/block/mmcblk0boot0/force_ro
+	dd if=${INSTALLER}/amonet/bin/tz.img of=${PART_PREFIX}/TEE2${REAL_SUFFIX} bs=512
+	dd if=${INSTALLER}/amonet/bin/tz.img of=${PART_PREFIX}/TEE1${REAL_SUFFIX} bs=512
 	ui_print "- updating payload"
-	dd if=${INSTALLER}/amonet/bin/boot.hdr of=${PART_PREFIX}/boot${AMONET_SUFFIX} bs=512 
-	dd if=${INSTALLER}/amonet/bin/boot.payload of=${PART_PREFIX}/boot${AMONET_SUFFIX} bs=512 seek=${PAYLOAD_BLOCK} 
-	dd if=${INSTALLER}/amonet/bin/boot.hdr of=${PART_PREFIX}/recovery${AMONET_SUFFIX} bs=512 
-	dd if=${INSTALLER}/amonet/bin/boot.payload of=${PART_PREFIX}/recovery${AMONET_SUFFIX} bs=512 seek=${PAYLOAD_BLOCK} 
+	dd if=${INSTALLER}/amonet/bin/boot.hdr of=${PART_PREFIX}/boot${AMONET_SUFFIX} bs=512
+	dd if=${INSTALLER}/amonet/bin/boot.payload of=${PART_PREFIX}/boot${AMONET_SUFFIX} bs=512 seek=${PAYLOAD_BLOCK}
+	dd if=${INSTALLER}/amonet/bin/boot.hdr of=${PART_PREFIX}/recovery${AMONET_SUFFIX} bs=512
+	dd if=${INSTALLER}/amonet/bin/boot.payload of=${PART_PREFIX}/recovery${AMONET_SUFFIX} bs=512 seek=${PAYLOAD_BLOCK}
 	ui_print "- Update complete"
 	ui_print " "
-
 else
 	ui_print "Installing amonet / Unlocking bootloader..."
 	ui_print ""
 	ui_print "This will wipe data / factory reset your device!!!"
-    ui_print "If this is not what you want, unplug the device now!!!"
+  ui_print "If this is not what you want, unplug the device now!!!"
 	ui_print ""
 	ui_print "Waiting 10 seconds before continuing..."
 	ui_print ""
-	
+
 	sleep 10
 
 	grep /data /proc/mounts
@@ -208,40 +173,6 @@ else
 	dd if=/dev/zero of=/dev/block/mmmcblk0 bs=512 seek=${USERDATA_OFFSET}
 	ui_print ""
 
-	ui_print "- checking versions"
-
-	lk_version=$(get_lk_version "${PART_PREFIX}/lk${REAL_SUFFIX}")
-	tz1_version=$(get_tz_version "${PART_PREFIX}/TEE1${REAL_SUFFIX}")
-	tz2_version=$(get_tz_version "${PART_PREFIX}/TEE2${REAL_SUFFIX}")
-	pl_version=$(get_pl_version "/dev/block/mmcblk0boot0")
-	if [ $tz1_version -ge $tz2_version ] || [ $tz2_version -eq $((0xFFFF)) ] ; then
-		tz_version=$tz1_version
-	else
-		tz_version=$tz2_version
-	fi
-	
-	ui_print ""
-	ui_print "PL Version: ${pl_version} (${max_pl})"
-	ui_print "LK Version: ${lk_version} (${max_lk})"
-	ui_print "TZ Version: ${tz_version} (${max_tz})"
-	ui_print ""
-
-	if [ $tz_version -gt $max_tz ] || [ $lk_version -gt $max_lk ] || [ $pl_version -gt $max_pl ] ; then
-		ui_print "TZ, Preloader or LK are too new, RPMB downgrade necessary"
-		ui_print ""
-		ui_print "This requires bricking the preloader to continue via bootrom-exploit"
-		ui_print "If this is not what you want, unplug the device now!!!"
-		ui_print ""
-		ui_print "Waiting 10 seconds before continuing..."
-		ui_print ""
-
-		BRICK=1
-		ui_print "- Bricking preloader..."
-		echo 0 > /sys/block/mmcblk0boot0/force_ro
-		dd if=/dev/zero of=/dev/block/mmcblk0boot0 bs=512 count=8
-		echo -n EMMC_BOOT > /dev/block/mmcblk0boot0
-	fi
-
 	ui_print "- flashing LK"
 	dd if=${INSTALLER}/amonet/bin/lk.bin of=${PART_PREFIX}/lk${REAL_SUFFIX} bs=512
 	ui_print ""
@@ -251,22 +182,11 @@ else
 	dd if=${INSTALLER}/amonet/bin/tz.img of=${PART_PREFIX}/TEE2${REAL_SUFFIX} bs=512
 	ui_print ""
 
-	if [ $BRICK ] ; then
-		ui_print "Rebooting..., continue with bootrom-step-minimal.sh"
-		reboot
-		exit 0
-	fi
-
-	ui_print "- flashing PL"
-	echo 0 > /sys/block/mmcblk0boot0/force_ro
-	dd if=${INSTALLER}/amonet/bin/preloader.bin of=/dev/block/mmcblk0boot0 bs=512
-	ui_print ""
-
 	ui_print "- flashing payload"
-	dd if=${INSTALLER}/amonet/bin/boot.hdr of=/dev/block/mmcblk0 seek=${BOOT_OFFSET} bs=512 
-	dd if=${INSTALLER}/amonet/bin/boot.payload of=/dev/block/mmcblk0 seek=$(( BOOT_OFFSET + PAYLOAD_BLOCK )) bs=512 
-	dd if=${INSTALLER}/amonet/bin/boot.hdr of=/dev/block/mmcblk0 seek=${RECOVERY_OFFSET} bs=512 
-	dd if=${INSTALLER}/amonet/bin/boot.payload of=/dev/block/mmcblk0 seek=$(( RECOVERY_OFFSET + PAYLOAD_BLOCK )) bs=512 
+	dd if=${INSTALLER}/amonet/bin/boot.hdr of=/dev/block/mmcblk0 seek=${BOOT_OFFSET} bs=512
+	dd if=${INSTALLER}/amonet/bin/boot.payload of=/dev/block/mmcblk0 seek=$(( BOOT_OFFSET + PAYLOAD_BLOCK )) bs=512
+	dd if=${INSTALLER}/amonet/bin/boot.hdr of=/dev/block/mmcblk0 seek=${RECOVERY_OFFSET} bs=512
+	dd if=${INSTALLER}/amonet/bin/boot.payload of=/dev/block/mmcblk0 seek=$(( RECOVERY_OFFSET + PAYLOAD_BLOCK )) bs=512
 	ui_print ""
 
 	ui_print "- flashing TWRP"
@@ -274,10 +194,10 @@ else
 	ui_print ""
 
 	ui_print "- flashing GPT"
-	dd if=${INSTALLER}/amonet/bin/gpt-sloane-amonet.bin of=/dev/block/mmcblk0 bs=512 count=34
+	dd if=${INSTALLER}/amonet/bin/gpt-ariel-amonet.bin of=/dev/block/mmcblk0 bs=512 count=34
 	ui_print ""
 
-        sync
+  sync
 
 	ui_print "Rebooting to TWRP in 5 Seconds..."
 	sleep 5
