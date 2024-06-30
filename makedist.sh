@@ -21,10 +21,16 @@ cp {bootrom-step.sh,fastboot-step.sh,boot-fastboot.sh,boot-recovery.sh} dist/unl
 mkdir -p dist/unlock/META-INF/com/google/android
 cp META-INF/com/google/android/{update-binary,updater-script} dist/unlock/META-INF/com/google/android/
 
+mkdir -p dist/stock/amonet/bin
+cp bin/twrp.img dist/stock/amonet/bin/
+cp bin/453_lk.bin dist/stock/amonet/bin/
+cp return-to-stock.sh dist/stock/amonet/
+
 mkdir -p dist/gptfix/amonet/bin
 cp gpt-fix.sh dist/gptfix/amonet/
 cp gpt/gpt-ariel.bin dist/gptfix/amonet/bin/
 
 mkdir -p dist/full
 cp -r dist/unlock/* dist/full/
+cp -r dist/stock/* dist/full/
 cp -r dist/gptfix/* dist/full/
