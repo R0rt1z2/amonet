@@ -140,6 +140,7 @@ __attribute__((section(".text.start"))) int main() {
 
     // Restore argptr
     uint32_t **argptr = (void*)0x81e00020;
+    *argptr = (void*)0x81E8549C; // there's also a copy at 0x81E80044?
 
     printf("g_boot_mode %u\n", *g_boot_mode);
     printf("f_boot_mode %u\n", *f_boot_mode);
