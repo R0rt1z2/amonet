@@ -117,16 +117,16 @@ fi
 
 if [ $UPDATE ] ; then
 	ui_print "- updating TWRP"
-	dd if=${INSTALLER}/amonet/bin/twrp.img of=${PART_PREFIX}/recovery_x
+	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/twrp.img of=${PART_PREFIX}/recovery_x
 	ui_print "- updating LK"
-	dd if=${INSTALLER}/amonet/bin/lk.bin of=${PART_PREFIX}/UBOOT${REAL_SUFFIX} bs=512
+	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/lk.bin of=${PART_PREFIX}/UBOOT${REAL_SUFFIX} bs=512
 	ui_print "- updating TZ"
-	dd if=${INSTALLER}/amonet/bin/tz.img of=${PART_PREFIX}/TEE2${REAL_SUFFIX} bs=512
-	dd if=${INSTALLER}/amonet/bin/tz.img of=${PART_PREFIX}/TEE1${REAL_SUFFIX} bs=512
+	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/tz.img of=${PART_PREFIX}/TEE2${REAL_SUFFIX} bs=512
+	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/tz.img of=${PART_PREFIX}/TEE1${REAL_SUFFIX} bs=512
 	ui_print "- updating payload"
 	dd if=${INSTALLER}/amonet/bin/boot.hdr of=${PART_PREFIX}/boot${AMONET_SUFFIX} bs=512
 	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/boot.payload of=${PART_PREFIX}/boot${AMONET_SUFFIX} bs=512 seek=${PAYLOAD_BLOCK}
-	dd if=${INSTALLER}/amonet/bin/boot.hdr of=${PART_PREFIX}/recovery${AMONET_SUFFIX} bs=512
+	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/boot.hdr of=${PART_PREFIX}/recovery${AMONET_SUFFIX} bs=512
 	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/boot.payload of=${PART_PREFIX}/recovery${AMONET_SUFFIX} bs=512 seek=${PAYLOAD_BLOCK}
 	ui_print "- Update complete"
 	ui_print " "
@@ -141,12 +141,12 @@ else
 	sleep 30
 
 	ui_print "- flashing LK"
-	dd if=${INSTALLER}/amonet/bin/lk.bin of=${PART_PREFIX}/UBOOT${REAL_SUFFIX} bs=512
+	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/lk.bin of=${PART_PREFIX}/UBOOT${REAL_SUFFIX} bs=512
 	ui_print ""
 
 	ui_print "- flashing TZ"
-	dd if=${INSTALLER}/amonet/bin/tz.img of=${PART_PREFIX}/TEE1${REAL_SUFFIX} bs=512
-	dd if=${INSTALLER}/amonet/bin/tz.img of=${PART_PREFIX}/TEE2${REAL_SUFFIX} bs=512
+	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/tz.img of=${PART_PREFIX}/TEE1${REAL_SUFFIX} bs=512
+	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/tz.img of=${PART_PREFIX}/TEE2${REAL_SUFFIX} bs=512
 	ui_print ""
 
 	ui_print "- flashing payload"
@@ -157,11 +157,11 @@ else
 	ui_print ""
 
 	ui_print "- flashing TWRP"
-	dd if=${INSTALLER}/amonet/bin/twrp.img of=${PART_PREFIX}/recovery
+	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/twrp.img of=${PART_PREFIX}/recovery
 	ui_print ""
 
 	ui_print "- flashing GPT"
-	dd if=${INSTALLER}/amonet/bin/gpt-ariel-amonet.bin of=/dev/block/mmcblk0 bs=512 count=34
+	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/gpt-ariel-amonet.bin of=/dev/block/mmcblk0 bs=512 count=34
 	ui_print ""
 
   sync
