@@ -361,39 +361,27 @@ def modify_step2(part_list):
 
 def unpatch(gpt_header, part_list):
     part_list_n = part_list.copy()
-    part_n = len(part_list) - 1
-    partition = part_list_n[len(part_list_n) - 3]
 
-    assert (
-        partition["name"].decode("utf-16le").rstrip("\x00") == "userdata"
-    ), "userdata is not where it is expected, refusing to unpatch"
+    cache_partition = get_part_by_name(part_list_n, "cache")
+    userdata_partition = get_part_by_name(part_list_n, "userdata")
+    boot_x_partition = get_part_by_name(part_list_n, "boot_x")
+    recovery_x_partition = get_part_by_name(part_list_n, "recovery_x")
 
-    partition["end"] = gpt_header["last_lba"]
-    part_list_n[len(part_list_n) - 2] = {
-        "type_guid": b"\x00",
-        "guid": b"\x00",
-        "start": 0,
-        "end": 0,
-        "attrib": 0,
-        "name": b"\x00",
-    }
-    part_list_n[len(part_list_n) - 1] = {
-        "type_guid": b"\x00",
-        "guid": b"\x00",
-        "start": 0,
-        "end": 0,
-        "attrib": 0,
-        "name": b"\x00",
-    }
+    assert all([cache_partition, userdata_partition, boot_x_partition, recovery_x_partition]), \
+        "one or more of the required partitions not found, unpatching cannot proceed"
 
-    partition = get_part_by_name(part_list_n, "boot_x")
-    if partition:
-        partition["name"] = "boot".encode("utf-16le") + b"\x00\x00"
+    for part in part_list_n[:]:
+        if part['name'].decode('utf-16le').rstrip('\x00') in ["boot", "recovery"]:
+            part_list_n.remove(part)
 
-    partition = get_part_by_name(part_list_n, "recovery_x")
-    if partition:
-        partition["name"] = "recovery".encode("utf-16le") + b"\x00\x00"
+    boot_x_partition['name'] = "boot".encode("utf-16le") + b"\x00\x00"
+    recovery_x_partition['name'] = "recovery".encode("utf-16le") + b"\x00\x00"
+
+    if userdata_partition:
+        cache_partition['end'] = userdata_partition['start'] - 1
+
     return part_list_n
+
 
 
 def main():
