@@ -168,7 +168,7 @@ else
 
 	ui_print "Rebooting to TWRP in 5 Seconds..."
 	sleep 5
-	# reboot recovery
+	reboot recovery
 	ui_print ""
 	exit 0
 fi

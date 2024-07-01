@@ -77,4 +77,4 @@ if [ -f "gpt/gpt.bin.offset" ] ; then
 fi
 
 echo "Rebooting TWRP Recovery"
-# adb reboot recovery
+adb reboot recovery
