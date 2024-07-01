@@ -1,4 +1,5 @@
 #include <inttypes.h>
+#include <stdbool.h>
 
 #include "libc.h"
 
@@ -52,6 +53,45 @@ void hex_dump(const void* data, size_t size) {
             }
         }
     }
+}
+
+uint32_t pmic_read_interface(uint32_t RegNum, uint32_t *val, uint32_t MASK, uint32_t SHIFT) {
+    uint32_t ret = 0;
+    uint32_t reg = 0;
+    uint32_t rdata;
+
+    ret = pwrap_wacs2(0, (RegNum), 0, &rdata);
+    reg = rdata;
+    if (ret != 0) {
+        printf("Reg[0x%08X] = pmic_wrap read data fail\n", RegNum);
+        return ret;
+    }
+
+    reg &= (MASK << SHIFT);
+    *val = (reg >> SHIFT);
+    return ret;
+}
+
+uint32_t is_usb_cable_in(void) {
+    uint32_t nRet = 0;
+    uint32_t nRegValue = 0;
+    nRet = pmic_read_interface((uint32_t)(0x0000),
+                             (&nRegValue),
+                             (uint32_t)(0x1),
+                             (uint32_t)(5));
+    nRet = nRegValue;
+    return nRet == 1;
+}
+
+bool is_power_key_pressed(void) {
+    uint32_t nRet = 0;
+    uint32_t nRegValue = 0;
+    nRet = pmic_read_interface((uint32_t)(0x0144),
+                             (&nRegValue),
+                             (uint32_t)(0x1),
+                             (uint32_t)(3));
+    nRet = nRegValue;
+    return nRet == 0;
 }
 
 int (*original_read)(part_dev_t *dev, uint64_t dev_addr, void *dst, uint32_t size) = (void*)(0x81e0a2c8|1);
@@ -205,6 +245,11 @@ __attribute__((section(".text.start"))) int main() {
 #endif
 
     uint16_t *patch;
+
+    if (is_usb_cable_in() && is_power_key_pressed()) {
+        printf("USB cable is connected and power key is pressed\n");
+        fastboot = 1;
+    }
 
     // force fastboot mode
     if (fastboot) {

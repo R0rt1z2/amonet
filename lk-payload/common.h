@@ -32,6 +32,7 @@ struct part_dev {
 part_dev_t* (*get_device)() = (void*)(0x81e0a700|1);
 void (*cache_clean)(void *addr, size_t sz) = (void*)0x81e1d1a4;
 size_t (*video_printf)(const char *format, ...) = (void *)(0x81e3e5ac|1);
+int (*pwrap_wacs2)(uint32_t write, uint32_t addr, uint32_t wdata, uint32_t *rdata) = (void*)(0x81e195f8|1);
 
 uint32_t* f_boot_mode = (uint32_t*) 0x81e81450;
 uint32_t* g_boot_mode = (uint32_t*) 0x81e6c414;
