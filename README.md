@@ -1,6 +1,6 @@
 # amonet
 
-This is an exploit chain for Fire HD 6 / 7 (2014) (4th gen / ariel - aston / KFARWI - KFASWI). It contains a MediaTek preloader exploit and a LittleKernel bootloader exploit.
+This is an exploit chain for Fire HD 8 (2015) (5th gen / thebes / KFTBWI). It contains a MediaTek preloader exploit and a LittleKernel bootloader exploit.
 
 ## License
 

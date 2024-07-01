@@ -8,7 +8,7 @@ forced_addr = 0x80208000
 page_size = 0x800 # ariel forces 0x800 bytes
 
 test = 0x81e1eddc # prints "Error, the pointer of pidme_data is NULL."
-patch_offset = 0x81e1d7fc - base
+patch_offset = 0x81e1d830 - base
 
 shellcode_sz = 0x1000 # TODO: check size
 
@@ -56,7 +56,7 @@ def main():
     hdr += b"\x00" * (lk_offset + page_size - len(hdr) - 0x200)
 
     hdr += orig[:patch_offset + 0x200]
-    hdr += bytes.fromhex('e1 f7 00 fc') # BLX doesn't seem to work, so use BL
+    hdr += bytes.fromhex('e1 f7 e6 fb') # BLX doesn't seem to work, so use BL
     hdr += orig[patch_offset + 0x200 + 4:]
 
     payload_block = (inject_offset // 0x200)

@@ -118,6 +118,7 @@ def parse_partition(part_table, offset, size):
 
 
 def parse_part_table(part_table, gpt_header):
+
     part_list = []
 
     part_table += b"\x00" * (
@@ -297,9 +298,12 @@ def generate_gpt(gpt_header, part_list):
 
 def modify_step1(part_list):
     part_list_n = part_list.copy()
-    partition = get_part_by_name(part_list_n, "cache")
+    part_n = len(part_list) - 1
+    partition = part_list_n[len(part_list_n) - 1]
 
-    assert partition, "no cache partition found, refusing modification"
+    assert (
+        partition["name"].decode("utf-16le").rstrip("\x00") == "userdata"
+    ), "the last partition is not userdata, refusing modification"
     assert (
         not get_part_by_name(part_list_n, "boot_x")
         and not get_part_by_name(part_list_n, "recovery_x")
@@ -307,38 +311,27 @@ def modify_step1(part_list):
         and not get_part_by_name(part_list_n, "recovery_tmp")
     ), "partition table is already modified, refusing modification"
 
-    index = part_list_n.index(partition)
-
     partition_orig = partition.copy()
-    partition_orig["end"] -= 2 * 0xF000
-    partition_orig["name"] = "cache".encode("utf-16le") + b"\x00\x00"
 
-    boot_tmp = {
-        "type_guid": partition["type_guid"],
-        "guid": uuid.uuid4().bytes_le,
-        "start": partition_orig["end"] + 1,
-        "end": partition_orig["end"] + 0xF000,
-        "attrib": partition["attrib"],
-        "name": "boot_tmp".encode("utf-16le") + b"\x00\x00",
-    }
+    partition["guid"] = uuid.uuid4().bytes_le
+    partition["end"] = partition["start"] + 0xF000 - 1
+    partition["name"] = "boot_tmp".encode("utf-16le") + b"\x00\x00"
 
-    recovery_tmp = {
-        "type_guid": partition["type_guid"],
-        "guid": uuid.uuid4().bytes_le,
-        "start": boot_tmp["end"] + 1,
-        "end": boot_tmp["end"] + 0xF000,
-        "attrib": partition["attrib"],
-        "name": "recovery_tmp".encode("utf-16le") + b"\x00\x00",
-    }
+    partition_n = partition.copy()
+    partition_n["guid"] = uuid.uuid4().bytes_le
+    partition_n["start"] = partition_n["end"] + 1
+    partition_n["end"] = partition_n["start"] + 0xF000 - 1
+    partition_n["name"] = "recovery_tmp".encode("utf-16le") + b"\x00\x00"
+    part_list_n.append(partition_n)
 
-    part_list_n[index] = partition_orig
-    part_list_n.insert(index + 1, boot_tmp)
-    part_list_n.insert(index + 2, recovery_tmp)
+    partition_orig["start"] = partition_n["end"] + 1
+    part_list_n.append(partition_orig)
 
     return part_list_n
 
 
 def modify_step2(part_list):
+
     part_list_n = part_list.copy()
     partition = get_part_by_name(part_list_n, "boot")
     if partition:
@@ -361,30 +354,43 @@ def modify_step2(part_list):
 
 def unpatch(gpt_header, part_list):
     part_list_n = part_list.copy()
+    part_n = len(part_list) - 1
+    partition = part_list_n[len(part_list_n) - 3]
 
-    cache_partition = get_part_by_name(part_list_n, "cache")
-    userdata_partition = get_part_by_name(part_list_n, "userdata")
-    boot_x_partition = get_part_by_name(part_list_n, "boot_x")
-    recovery_x_partition = get_part_by_name(part_list_n, "recovery_x")
+    assert (
+        partition["name"].decode("utf-16le").rstrip("\x00") == "userdata"
+    ), "userdata is not where it is expected, refusing to unpatch"
 
-    assert all([cache_partition, userdata_partition, boot_x_partition, recovery_x_partition]), \
-        "one or more of the required partitions not found, unpatching cannot proceed"
+    partition["end"] = gpt_header["last_lba"]
+    part_list_n[len(part_list_n) - 2] = {
+        "type_guid": b"\x00",
+        "guid": b"\x00",
+        "start": 0,
+        "end": 0,
+        "attrib": 0,
+        "name": b"\x00",
+    }
+    part_list_n[len(part_list_n) - 1] = {
+        "type_guid": b"\x00",
+        "guid": b"\x00",
+        "start": 0,
+        "end": 0,
+        "attrib": 0,
+        "name": b"\x00",
+    }
 
-    for part in part_list_n[:]:
-        if part['name'].decode('utf-16le').rstrip('\x00') in ["boot", "recovery"]:
-            part_list_n.remove(part)
+    partition = get_part_by_name(part_list_n, "boot_x")
+    if partition:
+        partition["name"] = "boot".encode("utf-16le") + b"\x00\x00"
 
-    boot_x_partition['name'] = "boot".encode("utf-16le") + b"\x00\x00"
-    recovery_x_partition['name'] = "recovery".encode("utf-16le") + b"\x00\x00"
-
-    if userdata_partition:
-        cache_partition['end'] = userdata_partition['start'] - 1
-
+    partition = get_part_by_name(part_list_n, "recovery_x")
+    if partition:
+        partition["name"] = "recovery".encode("utf-16le") + b"\x00\x00"
     return part_list_n
 
 
-
 def main():
+
     if len(sys.argv) == 2:
         cmd = "print"
         in_file = sys.argv[1]
