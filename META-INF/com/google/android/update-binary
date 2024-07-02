@@ -6,6 +6,7 @@ PART_PREFIX=/dev/block/platform/mtk-msdc.0/by-name
 
 PAYLOAD_BLOCK=57271
 BOOT_OFFSET=4239360
+CACHE_OFFSET=2560000
 RECOVERY_OFFSET=4300800
 
 # detect whether in boot mode
@@ -179,6 +180,29 @@ else
 	ui_print ""
 
 	sleep 30
+
+	grep /cache /proc/mounts
+	if [ $? -eq 0 ] ; then
+		ui_print "- unmounting /cache"
+		umount /cache
+		if [ $? -ne 0 ] ; then
+			umount -f /cache
+			if [ $? -ne 0 ] ; then
+				ui_print "-- Failed unmounting cache, abort!"
+				exit 1
+			fi
+		fi
+	fi
+
+	# Make sure it won't be mounted again
+	part=$(readlink -f $PART_PREFIX/cache)
+	if [ -b "$part" ] ; then
+		rm -f "$part"
+	fi
+
+	ui_print "- erasing cache"
+	${INSTALLER}/amonet/bin/busybox dd if=/dev/zero of=/dev/block/mmmcblk0 bs=512 seek=${CACHE_OFFSET}
+	ui_print ""
 
 	ui_print "- flashing LK"
 	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/lk.bin of=${PART_PREFIX}/UBOOT${REAL_SUFFIX} bs=512
