@@ -37,7 +37,7 @@ def main(dev, args):
         log("Flashing GPT")
         flash_binary(
             dev,
-            f"../bin/gpt-ariel-{args.size}.bin",
+            f"../bin/gpt-ariel-{args.size}G.bin",
             dev.mmc.gpt_start // dev.mmc.block_size,
         )
 

@@ -27,7 +27,7 @@ cp bin/453_lk.bin dist/stock/amonet/bin/
 cp return-to-stock.sh dist/stock/amonet/
 
 mkdir -p dist/gptfix/amonet/bin
-cp {gpt-fix-16G.sh,gpt-fix-32G.sh} dist/gptfix/amonet/
+cp {gpt-fix-16G.sh,gpt-fix-8G.sh} dist/gptfix/amonet/
 cp gpt/{gpt-ariel-8G.bin,gpt-ariel-16G.bin} dist/gptfix/amonet/bin/
 
 mkdir -p dist/full
