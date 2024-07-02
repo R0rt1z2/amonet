@@ -85,7 +85,7 @@ INSTALLER=$TMPDIR/install
 rm -rf $TMPDIR 2>/dev/null
 mkdir -p $INSTALLER 2>/dev/null
 
-unzip -o "$ZIP" 'amonet/bin/busybox' 'amonet/bin/lk.bin' 'amonet/bin/tz.img' 'amonet/bin/preloader.bin' 'amonet/bin/twrp.img' 'amonet/bin/boot.hdr' 'amonet/bin/boot.payload' 'amonet/bin/gpt-ariel-amonet.bin' -d $INSTALLER >&2
+unzip -o "$ZIP" 'amonet/bin/busybox' 'amonet/bin/lk.bin' 'amonet/bin/tz.img' 'amonet/bin/preloader.bin' 'amonet/bin/twrp.img' 'amonet/bin/boot.hdr' 'amonet/bin/boot.payload' 'amonet/bin/gpt-ariel-8G-amonet.bin' 'amonet/bin/gpt-ariel-16G-amonet.bin' -d $INSTALLER >&2
 
 ##########################################################################################
 # Main
@@ -93,6 +93,20 @@ unzip -o "$ZIP" 'amonet/bin/busybox' 'amonet/bin/lk.bin' 'amonet/bin/tz.img' 'am
 
 ui_print " "
 ui_print "amonet installer for ariel"
+
+STORAGE_MODEL="8G"
+if [ -f /sys/block/mmcblk0/size ] ; then
+  MMC_SIZE=$(cat /sys/block/mmcblk0/size)
+  if [ $MMC_SIZE -eq 15269888 ] ; then
+    ui_print "8GB model detected"
+  elif [ $MMC_SIZE -eq 30535680 ] ; then
+    ui_print "16GB model detected"
+    STORAGE_MODEL="16G"
+  else
+    ui_print "Unknown MMC size: $MMC_SIZE"
+    exit 1
+  fi
+fi
 
 # Check if gpt is already modified
 GPT_DATA=$(dd if=/dev/block/mmcblk0 bs=512 count=34 2> /dev/null)
@@ -161,7 +175,7 @@ else
 	ui_print ""
 
 	ui_print "- flashing GPT"
-	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/gpt-ariel-amonet.bin of=/dev/block/mmcblk0 bs=512 count=34
+	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/gpt-ariel-${STORAGE_MODEL}-amonet.bin of=/dev/block/mmcblk0 bs=512 count=34
 	ui_print ""
 
   sync

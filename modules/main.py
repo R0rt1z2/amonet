@@ -36,7 +36,9 @@ def main(dev, args):
         switch_user(dev)
         log("Flashing GPT")
         flash_binary(
-            dev, "../bin/gpt-ariel.bin", dev.mmc.gpt_start // dev.mmc.block_size
+            dev,
+            f"../bin/gpt-ariel-{args.size}.bin",
+            dev.mmc.gpt_start // dev.mmc.block_size,
         )
 
     # 1) Sanity check GPT
@@ -177,10 +179,16 @@ if __name__ == "__main__":
         "--image", "-f", type=str, help="Image file to flash to the partition"
     )
     arg_parser.add_argument("--gptfix", "-g", action="store_true", help="Fix GPT")
+    arg_parser.add_argument(
+        "--size", type=int, choices=[8, 16], help="Size of the storage device (8 or 16)"
+    )
     args = arg_parser.parse_args()
 
     if args.image and not args.partition:
         arg_parser.error("--partition is required when --image is provided")
+
+    if args.gptfix and args.size is None:
+        arg_parser.error("--size is required when --gptfix is provided")
 
     dev = Device(args.port)
     main(dev, args)

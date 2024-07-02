@@ -9,7 +9,7 @@ fi
 
 mkdir -p dist/unlock/amonet/bin
 cp bin/{busybox,preloader.bin,lk.bin,tz.img,twrp.img,boot.hdr,boot.payload} dist/unlock/amonet/bin/
-cp gpt/gpt-ariel-amonet.bin dist/unlock/amonet/bin/
+cp gpt/{gpt-ariel-8G-amonet.bin,gpt-ariel-16G-amonet.bin} dist/unlock/amonet/bin/
 
 echo -ne "boot-recovery\x00" > dist/unlock/amonet/bin/boot-recovery.bin
 
@@ -27,8 +27,8 @@ cp bin/453_lk.bin dist/stock/amonet/bin/
 cp return-to-stock.sh dist/stock/amonet/
 
 mkdir -p dist/gptfix/amonet/bin
-cp gpt-fix.sh dist/gptfix/amonet/
-cp gpt/gpt-ariel.bin dist/gptfix/amonet/bin/
+cp {gpt-fix-16G.sh,gpt-fix-32G.sh} dist/gptfix/amonet/
+cp gpt/{gpt-ariel-8G.bin,gpt-ariel-16G.bin} dist/gptfix/amonet/bin/
 
 mkdir -p dist/full
 cp -r dist/unlock/* dist/full/
