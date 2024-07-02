@@ -48,6 +48,21 @@ check_product() {
   fi
 }
 
+check_mount() {
+  if [ ! -d ${2} ] ; then
+    mkdir ${2}
+  fi
+
+  grep -r ${2} /proc/mounts
+  if [ $? -eq 1 ] ; then
+    mount ${PART_PREFIX}/${1} ${2}
+  fi
+
+  if [ $? -ne 0 ] ; then
+    ui_print "Failed to mount ${1}"
+  fi
+}
+
 ##########################################################################################
 # Flashable update-binary preparation
 ##########################################################################################
@@ -119,6 +134,17 @@ else
 	if [ $? -eq 0 ] ; then
 		ui_print "Partially modified GPT detected, forcing reinstall..."
 	fi
+fi
+
+if [ ! $UPDATE ] ; then
+  check_mount persisbackup /persistbackup
+  check_mount userdata /data
+
+  ${INSTALLER}/amonet/bin/busybox dd if=/dev/block/mmcblk0 of=/persistbackup/gpt-ariel-${STORAGE_MODEL}.bin bs=512 count=34
+  ${INSTALLER}/amonet/bin/busybox dd if=/dev/block/mmcblk0 of=/data/gpt-ariel-${STORAGE_MODEL}.bin bs=512 count=34
+
+  ui_print "GPT backup saved to /persistbackup/gpt-ariel-${STORAGE_MODEL}.bin"
+  ui_print "GPT backup saved to /data/gpt-ariel-${STORAGE_MODEL}.bin"
 fi
 
 if [ -L $PART_PREFIX/UBOOT_real ] ; then
