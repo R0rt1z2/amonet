@@ -101,7 +101,7 @@ INSTALLER=$TMPDIR/install
 rm -rf $TMPDIR 2>/dev/null
 mkdir -p $INSTALLER 2>/dev/null
 
-unzip -o "$ZIP" 'amonet/bin/busybox' 'amonet/bin/lk.bin' 'amonet/bin/tz.img' 'amonet/bin/preloader.bin' 'amonet/bin/twrp.img' 'amonet/bin/boot.hdr' 'amonet/bin/boot.payload' 'amonet/bin/gpt-ariel-8G-amonet.bin' 'amonet/bin/gpt-ariel-16G-amonet.bin' 'amonet/bin/wipe-cache.bin' -d $INSTALLER >&2
+unzip -o "$ZIP" 'amonet/bin/busybox' 'amonet/bin/lk.bin' 'amonet/bin/tz.img' 'amonet/bin/preloader.bin' 'amonet/bin/twrp.img' 'amonet/bin/boot.hdr' 'amonet/bin/boot.payload' 'amonet/bin/gpt-ariel-8G-amonet.bin' 'amonet/bin/gpt-ariel-16G-amonet.bin' 'amonet/bin/boot-recovery.bin' -d $INSTALLER >&2
 
 ##########################################################################################
 # Main
@@ -206,7 +206,7 @@ else
 	ui_print ""
 
 	ui_print "- preparing wipe flag"
-	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/wipe-cache.bin of=${PART_PREFIX}/MISC
+	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/boot-recovery.bin of=${PART_PREFIX}/MISC
 
 	sync
 
