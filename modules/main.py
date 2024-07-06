@@ -36,7 +36,9 @@ def main(dev, args):
         switch_user(dev)
         log("Flashing GPT")
         flash_binary(
-            dev, "../bin/gpt-ariel.bin", dev.mmc.gpt_start // dev.mmc.block_size
+            dev,
+            f"../bin/gpt-thempis-{args.size}G.bin",
+            dev.mmc.gpt_start // dev.mmc.block_size,
         )
 
     # 1) Sanity check GPT
@@ -100,19 +102,10 @@ def main(dev, args):
     log("Check boot0")
     switch_boot0(dev)
 
-    # 3) Downgrade preloader
-    log("Flash preloader")
+    # 3) Flash TZ (includes preloader)
+    log("Flash TZ")
     switch_user(dev)
-    flash_binary(
-        dev,
-        "../bin/preloader.bin",
-        (gpt["TEE2"][0] + 0x300000) + (dev.mmc.gpt_start // dev.mmc.block_size),
-    )
-    flash_binary(
-        dev,
-        "../bin/preloader.bin",
-        (gpt["TEE1"][0] + 0x300000) + (dev.mmc.gpt_start // dev.mmc.block_size),
-    )
+    flash_partition(dev, gpt, "TEE1", "../bin/tz.img")
 
     # 4) Flash LK
     log("Flash lk")
@@ -177,10 +170,16 @@ if __name__ == "__main__":
         "--image", "-f", type=str, help="Image file to flash to the partition"
     )
     arg_parser.add_argument("--gptfix", "-g", action="store_true", help="Fix GPT")
+    arg_parser.add_argument(
+        "--size", type=int, choices=[8, 16], help="Size of the storage device (8 or 16)"
+    )
     args = arg_parser.parse_args()
 
     if args.image and not args.partition:
         arg_parser.error("--partition is required when --image is provided")
+
+    if args.gptfix and args.size is None:
+        arg_parser.error("--size is required when --gptfix is provided")
 
     dev = Device(args.port)
     main(dev, args)

@@ -94,8 +94,8 @@ bool is_power_key_pressed(void) {
     return nRet == 0;
 }
 
-int (*original_read)(part_dev_t *dev, uint64_t dev_addr, void *dst, uint32_t size) = (void*)(0x81e0a2c8|1);
-int (*app)() = (void*)(0x81e3c9f4|1);
+int (*original_read)(part_dev_t *dev, uint64_t dev_addr, void *dst, uint32_t size) = (void*)(0x81e0a2d0|1);
+int (*app)() = (void*)(0x81e3d038|1);
 
 uint64_t g_boot, g_boot_x, g_lk, g_misc, g_recovery, g_recovery_x;
 
@@ -153,9 +153,9 @@ static void parse_gpt() {
 __attribute__((section(".text.start"))) int main() {
     int ret = 0;
 
-    printf("This is LK-payload by xyz. Copyright 2019\n");
-    printf("Original version for sloane by k4y0z and t0x1cSH. Copyright 2020\n");
-    printf("Ported to thebes by R0rt1z2. Copyright 2024\n");
+    video_printf("This is LK-payload by xyz. Copyright 2019\n");
+    video_printf("Original version for sloane by k4y0z and t0x1cSH. Copyright 2020\n");
+    video_printf("Ported to thebes / memphis by R0rt1z2. Copyright 2024\n");
 
     // We need to clean the cache first, since we jumped straight to the payload
     cache_clean((void *)PAYLOAD_DST, PAYLOAD_SIZE);
@@ -231,9 +231,9 @@ __attribute__((section(".text.start"))) int main() {
       // UART flag on MISC
       if(strncmp(bootloader_msg + 0x10, "UART_PLEASE", 11) == 0) {
         // Force uart enable
-        char* disable_uart = (char*)0x81e60ee4;
+        char* disable_uart = (char*)0x81e61a74;
         strcpy(disable_uart, " printk.disable_uart=0");
-        char* disable_uart2 = (char*)0x81e6151c;
+        char* disable_uart2 = (char*)0x81e62154;
         strcpy(disable_uart2, "printk.disable_uart=0");
       }
 
@@ -262,7 +262,7 @@ __attribute__((section(".text.start"))) int main() {
     }
 
     // device is unlocked
-    uint8_t **unlocked = (uint8_t**)0x81e800b4;
+    uint8_t **unlocked = (uint8_t**)0x81e8127c;
     (*unlocked)[0x16] = 0x1;
 
     // printf("(void*)dev->read 0x%08X\n", (void*)dev->read);

@@ -5,8 +5,6 @@
 PART_PREFIX=/dev/block/platform/mtk-msdc.0/by-name
 
 PAYLOAD_BLOCK=57271
-BOOT_OFFSET=4239360
-RECOVERY_OFFSET=4300800
 
 # detect whether in boot mode
 getprop | grep zygote | grep -q running && bootMode=true || bootMode=false
@@ -74,9 +72,7 @@ if [ "$?" -eq "0" ]; then
   done
 fi
 
-check_product "ariel" " - Amazon Fire HD6 / HD7 (4th generation) - "
-
-check_recovery
+# check_product "thempis" " - Amazon Fire HD10 / HD8 (5th generation) - "
 
 TMPDIR=/dev/tmp
 INSTALLER=$TMPDIR/install
@@ -85,27 +81,14 @@ INSTALLER=$TMPDIR/install
 rm -rf $TMPDIR 2>/dev/null
 mkdir -p $INSTALLER 2>/dev/null
 
-unzip -o "$ZIP" 'amonet/bin/busybox' 'amonet/bin/lk.bin' 'amonet/bin/tz.img' 'amonet/bin/preloader.bin' 'amonet/bin/twrp.img' 'amonet/bin/boot.hdr' 'amonet/bin/boot.payload' 'amonet/bin/gpt-ariel-amonet.bin' -d $INSTALLER >&2
+unzip -o "$ZIP" 'amonet/bin/busybox' 'amonet/bin/lk.bin' 'amonet/bin/tz.img' 'amonet/bin/twrp.img' 'amonet/bin/boot.hdr' 'amonet/bin/boot.payload' -d $INSTALLER >&2
 
 ##########################################################################################
 # Main
 ##########################################################################################
 
 ui_print " "
-ui_print "amonet installer for ariel"
-
-# Check if gpt is already modified
-GPT_DATA=$(dd if=/dev/block/mmcblk0 bs=512 count=34 2> /dev/null)
-echo "$GPT_DATA" | grep -q boot_x
-if [ $? -eq 0 ] ; then
-	ui_print "GPT is already modified, updating amonet..."
-	UPDATE=1
-else
-  echo "$GPT_DATA" | grep -q boot_tmp
-	if [ $? -eq 0 ] ; then
-		ui_print "Partially modified GPT detected, forcing reinstall..."
-	fi
-fi
+ui_print "amonet installer for thebes / memphis"
 
 if [ -L $PART_PREFIX/UBOOT_real ] ; then
 	REAL_SUFFIX=_real
@@ -115,62 +98,19 @@ if [ -L $PART_PREFIX/boot_amonet ] ; then
 	AMONET_SUFFIX=_amonet
 fi
 
-if [ $UPDATE ] ; then
-	ui_print "- updating TWRP"
-	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/twrp.img of=${PART_PREFIX}/recovery_x
-	ui_print "- updating LK"
-	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/lk.bin of=${PART_PREFIX}/UBOOT${REAL_SUFFIX} bs=512
-	ui_print "- updating TZ"
-	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/tz.img of=${PART_PREFIX}/TEE2${REAL_SUFFIX} bs=512
-	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/tz.img of=${PART_PREFIX}/TEE1${REAL_SUFFIX} bs=512
-	ui_print "- updating payload"
-	dd if=${INSTALLER}/amonet/bin/boot.hdr of=${PART_PREFIX}/boot${AMONET_SUFFIX} bs=512
-	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/boot.payload of=${PART_PREFIX}/boot${AMONET_SUFFIX} bs=512 seek=${PAYLOAD_BLOCK}
-	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/boot.hdr of=${PART_PREFIX}/recovery${AMONET_SUFFIX} bs=512
-	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/boot.payload of=${PART_PREFIX}/recovery${AMONET_SUFFIX} bs=512 seek=${PAYLOAD_BLOCK}
-	ui_print "- Update complete"
-	ui_print " "
-else
-	ui_print "Installing amonet / Unlocking bootloader..."
-	ui_print ""
-  ui_print "If this is not what you want, turn off the device now!"
-	ui_print ""
-	ui_print "Waiting 30 seconds before continuing..."
-	ui_print ""
-
-	sleep 30
-
-	ui_print "- flashing LK"
-	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/lk.bin of=${PART_PREFIX}/UBOOT${REAL_SUFFIX} bs=512
-	ui_print ""
-
-	ui_print "- flashing TZ"
-	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/tz.img of=${PART_PREFIX}/TEE1${REAL_SUFFIX} bs=512
-	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/tz.img of=${PART_PREFIX}/TEE2${REAL_SUFFIX} bs=512
-	ui_print ""
-
-	ui_print "- flashing payload"
-	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/boot.hdr of=/dev/block/mmcblk0 seek=${BOOT_OFFSET} bs=512
-	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/boot.payload of=/dev/block/mmcblk0 seek=$(( BOOT_OFFSET + PAYLOAD_BLOCK )) bs=512
-	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/boot.hdr of=/dev/block/mmcblk0 seek=${RECOVERY_OFFSET} bs=512
-	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/boot.payload of=/dev/block/mmcblk0 seek=$(( RECOVERY_OFFSET + PAYLOAD_BLOCK )) bs=512
-	ui_print ""
-
-	ui_print "- flashing TWRP"
-	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/twrp.img of=${PART_PREFIX}/recovery
-	ui_print ""
-
-	ui_print "- flashing GPT"
-	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/gpt-ariel-amonet.bin of=/dev/block/mmcblk0 bs=512 count=34
-	ui_print ""
-
-  sync
-
-	ui_print "Rebooting to TWRP in 5 Seconds..."
-	sleep 5
-	reboot recovery
-	ui_print ""
-	exit 0
-fi
+ui_print "- updating TWRP"
+${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/twrp.img of=${PART_PREFIX}/recovery_x
+ui_print "- updating LK"
+${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/lk.bin of=${PART_PREFIX}/UBOOT${REAL_SUFFIX} bs=512
+ui_print "- updating TZ"
+${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/tz.img of=${PART_PREFIX}/TEE2${REAL_SUFFIX} bs=512
+${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/tz.img of=${PART_PREFIX}/TEE1${REAL_SUFFIX} bs=512
+ui_print "- updating payload"
+dd if=${INSTALLER}/amonet/bin/boot.hdr of=${PART_PREFIX}/boot${AMONET_SUFFIX} bs=512
+${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/boot.payload of=${PART_PREFIX}/boot${AMONET_SUFFIX} bs=512 seek=${PAYLOAD_BLOCK}
+${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/boot.hdr of=${PART_PREFIX}/recovery${AMONET_SUFFIX} bs=512
+${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/boot.payload of=${PART_PREFIX}/recovery${AMONET_SUFFIX} bs=512 seek=${PAYLOAD_BLOCK}
+ui_print "- Update complete"
+ui_print " "
 
 exit 0

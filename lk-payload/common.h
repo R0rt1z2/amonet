@@ -29,12 +29,12 @@ struct part_dev {
     int (*write)    (part_dev_t *dev, unsigned char *src, uint64_t dst, int size);
 };
 
-part_dev_t* (*get_device)() = (void*)(0x81e0a700|1);
-void (*cache_clean)(void *addr, size_t sz) = (void*)0x81e1d1d8;
-size_t (*video_printf)(const char *format, ...) = (void *)(0x81e3e884|1);
-int (*pwrap_wacs2)(uint32_t write, uint32_t addr, uint32_t wdata, uint32_t *rdata) = (void*)(0x81e1962c|1);
+part_dev_t* (*get_device)() = (void*)(0x81e0a708|1);
+void (*cache_clean)(void *addr, size_t sz) = (void*)0x81e1d238;
+size_t (*video_printf)(const char *format, ...) = (void *)(0x81e3edf8|1);
+int (*pwrap_wacs2)(uint32_t write, uint32_t addr, uint32_t wdata, uint32_t *rdata) = (void*)(0x81e1968c|1);
 
-uint32_t* f_boot_mode = (uint32_t*) 0x81e81450;
+uint32_t* f_boot_mode = (uint32_t*) 0x81e82618;
 uint32_t* g_boot_mode = (uint32_t*) 0x81e6c414;
 
 #define PAYLOAD_DST 0x81dff000
