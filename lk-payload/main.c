@@ -265,6 +265,15 @@ __attribute__((section(".text.start"))) int main() {
     uint8_t **unlocked = (uint8_t**)0x81e8127c;
     (*unlocked)[0x16] = 0x1;
 
+    patch = (void*)0x81e3bfd4;
+    *patch++ = 0x2001; // movs r0, #1
+    *patch = 0x4770;   // bx lr
+
+    // amzn_verify_limited_unlock (to set androidboot.unlocked_kernel=true)
+    patch = (void*)0x81e3c018;
+    *patch++ = 0x2000; // movs r0, #0
+    *patch = 0x4770;   // bx lr
+
     // printf("(void*)dev->read 0x%08X\n", (void*)dev->read);
     // printf("(void*)&dev->read 0x%08X\n", (void*)&dev->read);
 
