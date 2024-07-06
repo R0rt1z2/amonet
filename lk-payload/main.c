@@ -94,8 +94,8 @@ bool is_power_key_pressed(void) {
     return nRet == 0;
 }
 
-int (*original_read)(part_dev_t *dev, uint64_t dev_addr, void *dst, uint32_t size) = (void*)(0x81e0a2c8|1);
-int (*app)() = (void*)(0x81e3c640|1);
+int (*original_read)(part_dev_t *dev, uint64_t dev_addr, void *dst, uint32_t size) = (void*)(0x81e0a2d0|1);
+int (*app)() = (void*)(0x81e3cb98|1);
 
 uint64_t g_boot, g_boot_x, g_lk, g_misc, g_recovery, g_recovery_x;
 
@@ -231,9 +231,9 @@ __attribute__((section(".text.start"))) int main() {
       // UART flag on MISC
       if(strncmp(bootloader_msg + 0x10, "UART_PLEASE", 11) == 0) {
         // Force uart enable
-        char* disable_uart = (char*)0x81e60934;
+        char* disable_uart = (char*)0x81e612d8;
         strcpy(disable_uart, " printk.disable_uart=0");
-        char* disable_uart2 = (char*)0x81e60fd0;
+        char* disable_uart2 = (char*)0x81e619a4;
         strcpy(disable_uart2, "printk.disable_uart=0");
       }
 
@@ -262,7 +262,7 @@ __attribute__((section(".text.start"))) int main() {
     }
 
     // device is unlocked
-    uint8_t **unlocked = (uint8_t**)0x81e800b4;
+    uint8_t **unlocked = (uint8_t**)0x81e81258;
     (*unlocked)[0x16] = 0x1;
 
     // printf("(void*)dev->read 0x%08X\n", (void*)dev->read);
@@ -273,8 +273,8 @@ __attribute__((section(".text.start"))) int main() {
     // hook bootimg read function
     original_read = (void*)dev->read;
 
-    patch32 = (void*)0x81E6C7C0;
-    *patch32 = (uint32_t)read_func;
+    // patch32 = (void*)0x81E6C7C0;
+    // *patch32 = (uint32_t)read_func;
 
     patch32 = (void*)&dev->read;
     *patch32 = (uint32_t)read_func;
