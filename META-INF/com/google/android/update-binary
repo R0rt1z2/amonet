@@ -72,7 +72,7 @@ if [ "$?" -eq "0" ]; then
   done
 fi
 
-# check_product "thempis" " - Amazon Fire HD10 / HD8 (5th generation) - "
+check_product "thempis" " - Amazon Fire HD10 / HD8 (5th generation) - "
 
 TMPDIR=/dev/tmp
 INSTALLER=$TMPDIR/install

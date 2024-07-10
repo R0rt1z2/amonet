@@ -153,9 +153,9 @@ static void parse_gpt() {
 __attribute__((section(".text.start"))) int main() {
     int ret = 0;
 
-    video_printf("This is LK-payload by xyz. Copyright 2019\n");
-    video_printf("Original version for sloane by k4y0z and t0x1cSH. Copyright 2020\n");
-    video_printf("Ported to thebes / memphis by R0rt1z2. Copyright 2024\n");
+    printf("This is LK-payload by xyz. Copyright 2019\n");
+    printf("Original version for sloane by k4y0z and t0x1cSH. Copyright 2020\n");
+    printf("Ported to thebes / memphis by R0rt1z2. Copyright 2024\n");
 
     // We need to clean the cache first, since we jumped straight to the payload
     cache_clean((void *)PAYLOAD_DST, PAYLOAD_SIZE);
@@ -279,8 +279,8 @@ __attribute__((section(".text.start"))) int main() {
 
     uint32_t *patch32;
 
-    video_printf("(void*)dev->read 0x%08X\n", (void*)dev->read);
-    video_printf("(void*)&dev->read 0x%08X\n", (void*)&dev->read);
+    // printf("(void*)dev->read 0x%08X\n", (void*)dev->read);
+    // printf("(void*)&dev->read 0x%08X\n", (void*)&dev->read);
 
     // hook bootimg read function
     original_read = (void*)dev->read;
