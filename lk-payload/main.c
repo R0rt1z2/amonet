@@ -2,8 +2,11 @@
 #include <stdbool.h>
 
 #include "libc.h"
-
 #include "common.h"
+
+#include "crypto/gcpu.h"
+#include "crypto/mtk_crypto.h"
+#include "crypto/hmac-sha256.h"
 
 //#define RELOAD_LK
 
@@ -22,37 +25,6 @@ void _putchar(char character)
     if (character == '\n')
         low_uart_put('\r');
     low_uart_put(character);
-}
-
-void hex_dump(const void* data, size_t size) {
-    char ascii[17];
-    size_t i, j;
-    ascii[16] = '\0';
-    for (i = 0; i < size; ++i) {
-        printf("%02X ", ((unsigned char*)data)[i]);
-        if (((unsigned char*)data)[i] >= ' ' && ((unsigned char*)data)[i] <= '~') {
-            ascii[i % 16] = ((unsigned char*)data)[i];
-        } else {
-            ascii[i % 16] = '.';
-        }
-        if ((i+1) % 8 == 0 || i+1 == size) {
-            printf(" ");
-            if ((i+1) % 16 == 0) {
-                printf("\n");
-                // printf("|  %s \n", ascii);
-            } else if (i+1 == size) {
-                ascii[(i+1) % 16] = '\0';
-                if ((i+1) % 16 <= 8) {
-                    printf(" ");
-                }
-                for (j = (i+1) % 16; j < 16; ++j) {
-                    printf("   ");
-                }
-                // printf("|  %s \n", ascii);
-                printf("\n");
-            }
-        }
-    }
 }
 
 uint32_t pmic_read_interface(uint32_t RegNum, uint32_t *val, uint32_t MASK, uint32_t SHIFT) {
@@ -93,6 +65,7 @@ bool is_power_key_pressed(void) {
     nRet = nRegValue;
     return nRet == 0;
 }
+
 
 int (*original_read)(part_dev_t *dev, uint64_t dev_addr, void *dst, uint32_t size) = (void*)(0x81e0a2d0|1);
 int (*app)() = (void*)(0x81e3cb98|1);
@@ -146,6 +119,79 @@ static void parse_gpt() {
         } else if (memcmp(name, "r\x00\x65\x00\x63\x00o\x00v\x00\x65\x00r\x00y\x00_\x00x\x00\x00\x00", 22) == 0) {
             g_recovery_x = start;
             printf("found recovery_x at 0x%08X\n", start);
+        }
+    }
+}
+
+static void byteswap(uint8_t *buf, size_t sz) {
+    for (size_t i = 0; i < sz / 2; ++i) {
+        size_t j = sz - i - 1;
+        uint8_t o = buf[j];
+        buf[j] = buf[i];
+        buf[i] = o;
+    }
+}
+
+static void derive_rpmb_key(uint8_t *in) {
+    printf("in:\n");
+    hex_dump(in, 0x10);
+    printf("\n");
+
+    uint8_t expand[64] = {0};
+    for (int i = 0; i < 64; ++i)
+    {
+        expand[i] = (in)[i % 16];
+    }
+
+    printf("expand:\n");
+    hex_dump(expand, 0x40);
+    printf("\n");
+
+    uint8_t result[0x20] = { 0 };
+    mtk_crypto_hmac_sha256_by_devkey(expand, 0x40, result);
+
+    printf("encrypted:\n");
+    hex_dump(result, 0x20);
+
+    uint8_t rpmb_key[0x20] = { 0 };
+    hmac_sha256(rpmb_key, result, 0x20, (uint8_t *)"RPMB", 5);
+
+    byteswap(rpmb_key, 0x20);
+
+    printf("final:\n");
+    hex_dump(rpmb_key, 0x20);
+    printf("\n");
+}
+
+void read_memory(uint32_t addr, uint8_t *buffer, size_t length) {
+    memcpy(buffer, (void *)addr, length);
+}
+
+void scan_memory() {
+    uint8_t iv[16];
+    uint8_t data[16];
+    uint8_t decrypted_data[16];
+    0x88000000
+    0x1012ffc0
+
+    for (uint32_t addr = 0x0; addr < 0x88000000; addr += 16) {
+        // Fetch data using IV
+        gcpu_aes_read16(addr, iv);
+
+        // Fetch data by reading from the pointer
+        read_memory(addr, data, 16);
+
+        // Check if the fetched data is not zero
+        if (memcmp(data, "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", 16) != 0) {
+            printf("Address: 0x%08x\n", addr);
+
+            // Print IV-decrypted data
+            printf("IV-decrypted data:\n");
+            hex_dump(iv, 16);
+
+            // Print normal data
+            printf("Normal data:\n");
+            hex_dump(data, 16);
         }
     }
 }
@@ -258,7 +304,67 @@ __attribute__((section(".text.start"))) int main() {
 	    *g_boot_mode = 99;
     }
     else if(*g_boot_mode == 2) {
-      video_printf("=> RECOVERY mode...");
+        video_printf("=> RECOVERY mode...");
+        // cid = 0x15010046 0x4531324D 0x421167AA 0x4E6034E9
+        // hardcode it for now
+        /*uint32_t cid[4] = { 0x15010046, 0x4531324D, 0x421167AA, 0x4E6034E9 };
+        printf("cid: 0x%08X 0x%08X 0x%08X 0x%08X\n", cid[0], cid[1], cid[2], cid[3]);
+        uint32_t cid_be[4] = { 0 };
+        for (int i = 0; i < 4; ++i) {
+            cid_be[i] = __builtin_bswap32(cid[i]);
+        }
+        printf("cid_be: 0x%08X 0x%08X 0x%08X 0x%08X\n", cid_be[0], cid_be[1], cid_be[2], cid_be[3]);
+        derive_rpmb_key((void*)cid_be);*/
+        //printf("data:\n");
+        //hex_dump(data, 0x10);
+        gcpu_init();
+        gcpu_acquire();
+        //gcpu_load_hw_key(0x30);
+        // use memptr set to set empty key
+        // 16 zero array
+        uint8_t empty_key[16] = {0x73, 0x5f, 0x23, 0xc9, 0x62, 0xe7, 0xa1, 0x0a,
+                              0xb2, 0x01, 0xd9, 0xa6, 0x42, 0x60, 0x64, 0xb1};
+        gcpu_memptr_set(0x12, empty_key);
+        gcpu_aes_decrypt(0x12, 0x0, 0x1a);
+        uint8_t dev_key[16] = {0};
+        gcpu_memptr_get(0x12, 16, dev_key);
+        printf("dev_key:\n");
+        hex_dump(dev_key, 0x10);
+        gcpu_release();
+
+        gcpu_acquire();
+        /*GCPU_WRITE_REG(GCPU_REG_MEM_P0, LK_BASE);
+        GCPU_WRITE_REG(GCPU_REG_MEM_P1, 0x0); // dst to invalid pointer (otherwise, update pattern)
+        GCPU_WRITE_REG(GCPU_REG_MEM_P2, 16);
+        GCPU_WRITE_REG(GCPU_REG_MEM_P4, 18);
+        GCPU_WRITE_REG(GCPU_REG_MEM_P5, 26);
+        GCPU_WRITE_REG(GCPU_REG_MEM_P6, 26);*/
+
+        uint8_t data[16] = {0};
+        gcpu_aes_read16(0x12001000, data);
+
+        /*int ret = gcpu_cmd(0x7E);
+        if (ret != 0) {
+            printf("aespk_d failed 0x%08X\n", ret);
+            return ret;
+        }
+
+        uint8_t out[16] = { 0 };
+        for (int i = 0; i < 4; i++) { // Read out the IV
+            ((uint32_t *)out)[i] = GCPU_READ_REG(GCPU_REG_MEM_CMD + 26 * 4 + i * 4);
+        }
+
+        printf("IV:\n");
+        hex_dump(out, 16);*/
+        //volatile uint32_t *wdt = (volatile uint32_t *)0x10000000;
+        /**
+        dev.write32(0x10000000, 0x22000000)
+        */
+        printf("kick watchdog\n");
+        GCPU_WRITE_REG(0x10000000, 0x22000000);
+        scan_memory();
+
+        gcpu_release();
     }
 
     // device is unlocked

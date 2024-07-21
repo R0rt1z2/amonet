@@ -7,6 +7,7 @@ import serial
 import serial.tools.list_ports
 
 from logger import log
+from functions import to_bytes
 
 BAUD = 115200
 TIMEOUT = 5
@@ -174,6 +175,15 @@ class Device:
         if status_check:
             self.check(self.dev.read(2), b"\x00\x00")  # status
 
+    def jump_da(self, addr):
+        self.dev.write(b'\xd5')
+        self.check(self.dev.read(1), b'\xd5') # echo cmd
+
+        self.dev.write(struct.pack(">I", addr))
+        self.check_int(self.dev.read(4), addr) # echo addr
+
+        self.check(self.dev.read(2), b'\x00\x00') # status
+
     def run_ext_cmd(self, cmd):
         self.dev.write(b"\xC8")
         self.check(self.dev.read(1), b"\xC8")  # echo cmd
@@ -183,14 +193,14 @@ class Device:
         self.dev.read(1)
         self.dev.read(2)
 
-    def wait_payload(self):
-        data = self.dev.read(4)
-        if data != b"\xB1\xB2\xB3\xB4":
+    def wait_payload(self, pattern, size=4):
+        data = self.dev.read(size)
+        if data != pattern:
             raise RuntimeError("received {} instead of expected pattern".format(data))
 
     def emmc_read(self, idx):
         # magic
-        self.dev.write(p32_be(0xF00DD00D))
+        self.dev.write(p32_be(0xf00dd00d))
         # cmd
         self.dev.write(p32_be(0x1000))
         # block to read
@@ -207,7 +217,7 @@ class Device:
             raise RuntimeError("data must be 0x200 bytes")
 
         # magic
-        self.dev.write(p32_be(0xF00DD00D))
+        self.dev.write(p32_be(0xf00dd00d))
         # cmd
         self.dev.write(p32_be(0x1001))
         # block to write
@@ -221,26 +231,27 @@ class Device:
 
     def emmc_switch(self, part):
         # magic
-        self.dev.write(p32_be(0xF00DD00D))
+        self.dev.write(p32_be(0xf00dd00d))
         # cmd
         self.dev.write(p32_be(0x1002))
         # partition
         self.dev.write(p32_be(part))
 
     def reboot(self):
-        self.write32(0x10000020, 0x1971)
-        self.write32(0x10000000, 0x22000014)
-        self.write32(0x10000014, 0x1209)
+        # magic
+        self.dev.write(p32_be(0xf00dd00d))
+        # cmd
+        self.dev.write(p32_be(0x3000))
 
     def kick_watchdog(self):
         # magic
-        self.dev.write(p32_be(0xF00DD00D))
+        self.dev.write(p32_be(0xf00dd00d))
         # cmd
         self.dev.write(p32_be(0x3001))
 
     def rpmb_read(self):
         # magic
-        self.dev.write(p32_be(0xF00DD00D))
+        self.dev.write(p32_be(0xf00dd00d))
         # cmd
         self.dev.write(p32_be(0x2000))
 
@@ -250,13 +261,58 @@ class Device:
 
         return data
 
+    def mem_read(self, address, size):
+        # magic
+        self.dev.write(p32_be(0xf00dd00d))
+        # cmd
+        self.dev.write(p32_be(0x5000))
+        # address
+        self.dev.write(p32_be(address))
+        # size
+        self.dev.write(p32_be(size))
+
+        data = self.dev.read(size)
+        if len(data) != size:
+            raise RuntimeError("read fail")
+
+        return data
+
+    def idme_read(self, field_name):
+        # magic
+        self.dev.write(p32_be(0xf00dd00d))
+        # cmd
+        self.dev.write(p32_be(0x7000))
+
+        if len(field_name) < 16:
+            field_name += b"\x00" * (16 - len(field_name))
+        self.dev.write(field_name)
+
+        size = int.from_bytes(self.dev.read(4), byteorder="big")
+        data = self.dev.read(size)
+        if len(data) != size or data == to_bytes(0xffffffff, 4):
+            raise RuntimeError("read fail")
+
+        elif data == to_bytes(0xbeefdeed, 4):
+            raise RuntimeError("IDME invalid")
+
+        elif data == to_bytes(0xdeadbeef, 4):
+            log(field_name + " not found in IDME")
+            return None
+
+        return data
+
     def rpmb_write(self, data):
         if len(data) != 0x100:
             raise RuntimeError("data must be 0x100 bytes")
 
         # magic
-        self.dev.write(p32_be(0xF00DD00D))
+        self.dev.write(p32_be(0xf00dd00d))
         # cmd
         self.dev.write(p32_be(0x2001))
         # data
         self.dev.write(data)
+
+    def reboot(self):
+        self.write32(0x10000020, 0x1971)
+        self.write32(0x10000000, 0x22000014)
+        self.write32(0x10000014, 0x1209)

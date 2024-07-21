@@ -10,7 +10,7 @@ BUILD_DIR := ./build
 
 TARGET := payload
 
-C_SRC = main.c libc.c
+C_SRC = main.c libc.c crypto/gcpu.c crypto/mtk_crypto.c crypto/sha256.c crypto/hmac-sha256.c drivers/devinfo.c
 ASM_SRC = start.S
 
 OBJ = $(C_SRC:%.c=$(BUILD_DIR)/%.o) $(ASM_SRC:%.S=$(BUILD_DIR)/%.o)

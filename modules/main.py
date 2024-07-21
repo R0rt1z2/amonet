@@ -19,6 +19,7 @@ from gpt import (
     parse_gpt as gpt_parse_gpt,
 )
 from mmc import Mmc
+from load_payload import load_payload
 
 
 def main(dev, args):
@@ -28,7 +29,10 @@ def main(dev, args):
     # 0.1) Handshake
     handshake(dev, args.skip_handshake)
 
-    # 0.2) Initialize eMMC
+    # 0.2) Load payload
+    load_payload(dev, "../brom-payload/pl/pl.bin")
+
+    '''# 0.2) Initialize eMMC
     log("Init emmc")
     dev.set_mmc(Mmc(dev, 0x11230000))
 
@@ -102,25 +106,6 @@ def main(dev, args):
     log("Check boot0")
     switch_boot0(dev)
 
-    # 3) Downgrade preloader
-    log("Flash preloader")
-    switch_user(dev)
-    flash_binary(
-        dev,
-        "../bin/preloader.bin",
-        (gpt["TEE2"][0] + 0x300000) + (dev.mmc.gpt_start // dev.mmc.block_size),
-    )
-    flash_binary(
-        dev,
-        "../bin/preloader.bin",
-        (gpt["TEE1"][0] + 0x300000) + (dev.mmc.gpt_start // dev.mmc.block_size),
-    )
-
-    # 4) Flash LK
-    log("Flash lk")
-    switch_user(dev)
-    flash_partition(dev, gpt, "UBOOT", "../bin/lk.bin")
-
     # 5) Flash payload
     log("Inject payload")
     switch_user(dev)
@@ -133,8 +118,8 @@ def main(dev, args):
     flash_binary(
         dev,
         "../bin/boot.payload",
-        (gpt["boot"][0] + 57271) + (dev.mmc.gpt_start // dev.mmc.block_size),
-        (gpt["boot"][1] * 0x200) - (57271 * 0x200),
+        (gpt["boot"][0] + 57255) + (dev.mmc.gpt_start // dev.mmc.block_size),
+        (gpt["boot"][1] * 0x200) - (57255 * 0x200),
     )
 
     switch_user(dev)
@@ -147,8 +132,8 @@ def main(dev, args):
     flash_binary(
         dev,
         "../bin/boot.payload",
-        (gpt["recovery"][0] + 57271) + (dev.mmc.gpt_start // dev.mmc.block_size),
-        (gpt["recovery"][1] * 0x200) - (57271 * 0x200),
+        (gpt["recovery"][0] + 57255) + (dev.mmc.gpt_start // dev.mmc.block_size),
+        (gpt["recovery"][1] * 0x200) - (57255 * 0x200),
     )
 
     log("Force fastboot")
@@ -159,7 +144,7 @@ def main(dev, args):
 
     # Reboot (to fastboot)
     log("Reboot to unlocked fastboot")
-    dev.reboot()
+    dev.reboot()'''
 
 
 if __name__ == "__main__":

@@ -4,10 +4,16 @@ import sys
 import time
 import threading
 
-from common import Device
 from logger import log
 from gpt import parse_gpt_compat
 
+def to_bytes(data, size = 1, endian = ">"):
+    if size == 4:
+        return struct.pack(endian + "I", data)
+    elif size == 2:
+        return struct.pack(endian + "H", data)
+    else:
+        return struct.pack(endian + "B", data)
 
 def check_modemmanager():
     pids = [pid for pid in os.listdir("/proc") if pid.isdigit()]
@@ -230,3 +236,12 @@ def parse_gpt(dev):
         + dev.mmc.read_block((start + 0xC00) // 0x200)
     )
     return parse_gpt_compat(dev.mmc.read_block(start // 0x200) + data)
+
+def load_payload_file(path, align=4):
+    with open(path, "rb") as fin:
+        payload = fin.read()
+    log("Load payload from {} = 0x{:X} bytes".format(path, len(payload)))
+    while len(payload) % align != 0:
+        payload += b"\x00"
+
+    return payload

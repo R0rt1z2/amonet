@@ -37,7 +37,7 @@ int (*pwrap_wacs2)(uint32_t write, uint32_t addr, uint32_t wdata, uint32_t *rdat
 uint32_t* f_boot_mode = (uint32_t*) 0x81e825f8;
 uint32_t* g_boot_mode = (uint32_t*) 0x81e6c414;
 
-#define PAYLOAD_DST 0x81dff000
+#define PAYLOAD_DST 0x81dfd000
 #define PAYLOAD_SRC 0x80000
 #define PAYLOAD_SIZE 0x80000
 
