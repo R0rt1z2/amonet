@@ -47,6 +47,13 @@ def serial_ports(vid="0E8D", pid="3000"):
 def p32_be(x):
     return struct.pack(">I", x)
 
+def to_bytes(data, size = 1, endian = ">"):
+    if size == 4:
+        return struct.pack(endian + "I", data)
+    elif size == 2:
+        return struct.pack(endian + "H", data)
+    else:
+        return struct.pack(endian + "B", data)
 
 class Device:
     def __init__(self, port=None):
@@ -174,6 +181,15 @@ class Device:
         if status_check:
             self.check(self.dev.read(2), b"\x00\x00")  # status
 
+    def jump_da(self, addr):
+        self.dev.write(b'\xd5')
+        self.check(self.dev.read(1), b'\xd5') # echo cmd
+
+        self.dev.write(struct.pack(">I", addr))
+        self.check_int(self.dev.read(4), addr) # echo addr
+
+        self.check(self.dev.read(2), b'\x00\x00') # status
+
     def run_ext_cmd(self, cmd):
         self.dev.write(b"\xC8")
         self.check(self.dev.read(1), b"\xC8")  # echo cmd
@@ -183,9 +199,9 @@ class Device:
         self.dev.read(1)
         self.dev.read(2)
 
-    def wait_payload(self):
-        data = self.dev.read(4)
-        if data != b"\xB1\xB2\xB3\xB4":
+    def wait_payload(self, pattern, size=4):
+        data = self.dev.read(size)
+        if data != pattern:
             raise RuntimeError("received {} instead of expected pattern".format(data))
 
     def emmc_read(self, idx):
@@ -260,3 +276,27 @@ class Device:
         self.dev.write(p32_be(0x2001))
         # data
         self.dev.write(data)
+
+    def idme_read(self, field_name):
+        # magic
+        self.dev.write(p32_be(0xf00dd00d))
+        # cmd
+        self.dev.write(p32_be(0x7000))
+
+        if len(field_name) < 16:
+            field_name += b"\x00" * (16 - len(field_name))
+        self.dev.write(field_name)
+
+        size = int.from_bytes(self.dev.read(4), byteorder="big")
+        data = self.dev.read(size)
+        if len(data) != size or data == to_bytes(0xffffffff, 4):
+            raise RuntimeError("read fail")
+
+        elif data == to_bytes(0xbeefdeed, 4):
+            raise RuntimeError("IDME invalid")
+
+        elif data == to_bytes(0xdeadbeef, 4):
+            log(field_name + " not found in IDME")
+            return None
+
+        return data

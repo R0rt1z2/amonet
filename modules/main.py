@@ -9,6 +9,7 @@ from argparse import ArgumentParser
 
 from common import Device
 from handshake import handshake
+from load_payload import load_payload
 from logger import log
 from functions import *
 from gpt import (
@@ -27,6 +28,9 @@ def main(dev, args):
 
     # 0.1) Handshake
     handshake(dev, args.skip_handshake)
+
+    if args.use_preloader_payload:
+        load_payload(dev, "../pl-payload/pl/pl.bin")
 
     # 0.2) Initialize eMMC
     log("Init emmc")
@@ -171,6 +175,13 @@ if __name__ == "__main__":
         action="store_true",
         default=False,
         help="Skip handshake",
+    )
+    arg_parser.add_argument(
+        "--use-preloader-payload",
+        "-u",
+        action="store_true",
+        default=False,
+        help="Use preloader payload",
     )
     arg_parser.add_argument(
         "--partition", "-p", type=str, help="Partition name to flash"

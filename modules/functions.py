@@ -51,7 +51,7 @@ def flash_data(dev, data, start_block, max_size=0):
     blocks = len(data) // 512
     for x in range(blocks):
         print("[{} / {}]".format(x + 1, blocks), end="\r")
-        dev.mmc.write_block(start_block + x, data[x * 512 : (x + 1) * 512])
+        dev.mmc.write_block(start_block + x, data[x * 512: (x + 1) * 512])
     print("")
 
 
@@ -140,11 +140,11 @@ def dump_partition(dev, gpt, name, output):
             (0, special_parts[name])
             if name.lower() in special_parts
             else gpt.get(name)
-            or (
-                lambda: (_ for _ in ()).throw(
-                    RuntimeError("partition not found: {}".format(name))
-                )
-            )()
+                 or (
+                     lambda: (_ for _ in ()).throw(
+                         RuntimeError("partition not found: {}".format(name))
+                     )
+                 )()
         )
 
     start_sector, sector_count = get_partition_info(name)
@@ -155,7 +155,7 @@ def dump_partition(dev, gpt, name, output):
 
     with open(output, "wb") as fout:
         for sector_index, sector in enumerate(
-            range(start_address, start_address + sector_count)
+                range(start_address, start_address + sector_count)
         ):
             block_data = dev.mmc.read_block(sector)
             fout.write(block_data)
@@ -176,11 +176,11 @@ def flash_partition(dev, gpt, name, input):
             (0, special_parts[name])
             if name.lower() in special_parts
             else gpt.get(name)
-            or (
-                lambda: (_ for _ in ()).throw(
-                    RuntimeError("partition not found: {}".format(name))
-                )
-            )()
+                 or (
+                     lambda: (_ for _ in ()).throw(
+                         RuntimeError("partition not found: {}".format(name))
+                     )
+                 )()
         )
 
     start_sector, sector_count = get_partition_info(name)
@@ -203,7 +203,7 @@ def flash_partition(dev, gpt, name, input):
 
     for sector_index in range(data_blocks):
         sector = start_address + sector_index
-        dev.mmc.write_block(sector, data[sector_index * 512 : (sector_index + 1) * 512])
+        dev.mmc.write_block(sector, data[sector_index * 512: (sector_index + 1) * 512])
         print("[{} / {}]".format(sector_index + 1, data_blocks), end="\r")
 
     print("")
@@ -222,11 +222,21 @@ def switch_user(dev):
 def parse_gpt(dev):
     start = dev.mmc.gpt_start + 0x200
     data = (
-        dev.mmc.read_block((start + 0x200) // 0x200)
-        + dev.mmc.read_block((start + 0x400) // 0x200)
-        + dev.mmc.read_block((start + 0x600) // 0x200)
-        + dev.mmc.read_block((start + 0x800) // 0x200)
-        + dev.mmc.read_block((start + 0xA00) // 0x200)
-        + dev.mmc.read_block((start + 0xC00) // 0x200)
+            dev.mmc.read_block((start + 0x200) // 0x200)
+            + dev.mmc.read_block((start + 0x400) // 0x200)
+            + dev.mmc.read_block((start + 0x600) // 0x200)
+            + dev.mmc.read_block((start + 0x800) // 0x200)
+            + dev.mmc.read_block((start + 0xA00) // 0x200)
+            + dev.mmc.read_block((start + 0xC00) // 0x200)
     )
     return parse_gpt_compat(dev.mmc.read_block(start // 0x200) + data)
+
+
+def load_payload_file(path, align=4):
+    with open(path, "rb") as fin:
+        payload = fin.read()
+    log("Load payload from {} = 0x{:X} bytes".format(path, len(payload)))
+    while len(payload) % align != 0:
+        payload += b"\x00"
+
+    return payload
