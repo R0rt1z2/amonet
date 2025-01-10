@@ -11,12 +11,15 @@ mkdir -p dist/unlock/amonet/bin
 cp bin/{busybox,preloader.bin,lk.bin,tz.img,twrp.img,boot.hdr,boot.payload} dist/unlock/amonet/bin/
 cp gpt/{gpt-ariel-8G-amonet.bin,gpt-ariel-16G-amonet.bin} dist/unlock/amonet/bin/
 
+mkdir -p dist/unlock/amonet/pl-payload/pl
+cp pl-payload/pl/pl.bin dist/unlock/amonet/pl-payload/pl/
+
 echo -ne "boot-recovery\x00" > dist/unlock/amonet/bin/boot-recovery.bin
 dd if=/dev/zero bs=1 count=196624 >> dist/unlock/amonet/bin/boot-recovery.bin
 echo -ne "WIPE_CACHE" | dd of=dist/unlock/amonet/bin/boot-recovery.bin bs=1 seek=196608 conv=notrunc
 
 mkdir -p dist/unlock/amonet/modules
-cp modules/{common.py,gpt.py,handshake.py,handshake2.py,logger.py,main.py,mmc.py,functions.py} dist/unlock/amonet/modules/
+cp modules/{common.py,console.py,gpt.py,handshake.py,handshake2.py,logger.py,main.py,mmc.py,functions.py} dist/unlock/amonet/modules/
 
 cp {functions.inc,bootrom-step.sh,fastboot-step.sh,boot-fastboot.sh,boot-recovery.sh} dist/unlock/amonet/
 
