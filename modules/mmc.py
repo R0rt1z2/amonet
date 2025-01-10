@@ -1,8 +1,8 @@
 # based on mmc driver from amonet
 # see https://github.com/xyzz/amonet
 
-from enum import Enum, IntFlag
 import time
+from enum import Enum, IntFlag
 from struct import pack, unpack
 
 
@@ -70,7 +70,9 @@ class Mmc:
 
         MMC_RSP_NONE = 0
         MMC_RSP_R1 = MMC_RSP_PRESENT | MMC_RSP_CRC | MMC_RSP_OPCODE
-        MMC_RSP_R1B = MMC_RSP_PRESENT | MMC_RSP_CRC | MMC_RSP_OPCODE | MMC_RSP_BUSY
+        MMC_RSP_R1B = (
+            MMC_RSP_PRESENT | MMC_RSP_CRC | MMC_RSP_OPCODE | MMC_RSP_BUSY
+        )
         MMC_RSP_R2 = MMC_RSP_PRESENT | MMC_RSP_136 | MMC_RSP_CRC
         MMC_RSP_R3 = MMC_RSP_PRESENT
         MMC_RSP_R4 = MMC_RSP_PRESENT
@@ -261,7 +263,10 @@ class Mmc:
         resp = self.RESP_NONE
         cmd_type = flags & Mmc.Flags.MMC_CMD_MASK
 
-        if opcode == Mmc.Opcode.MMC_SEND_OP_COND or opcode == Mmc.Opcode.SD_APP_OP_COND:
+        if (
+            opcode == Mmc.Opcode.MMC_SEND_OP_COND
+            or opcode == Mmc.Opcode.SD_APP_OP_COND
+        ):
             resp = self.RESP_R3
         elif opcode == Mmc.Opcode.MMC_SET_RELATIVE_ADDR:
             if cmd_type == Mmc.Flags.MMC_CMD_BCR:
@@ -277,7 +282,10 @@ class Mmc:
                 resp = self.RESP_NONE
             else:
                 resp = self.RESP_R1B
-        elif opcode == Mmc.Opcode.SD_SEND_IF_CONF and cmd_type == Mmc.Flags.MMC_CMD_BCR:
+        elif (
+            opcode == Mmc.Opcode.SD_SEND_IF_CONF
+            and cmd_type == Mmc.Flags.MMC_CMD_BCR
+        ):
             resp = self.RESP_R1
         else:
             resp_type = flags & (
@@ -298,7 +306,9 @@ class Mmc:
             else:
                 resp = self.RESP_NONE
 
-        rawcmd = opcode.value | (self.msdc_rsp[resp] << 7) | (self.block_size << 16)
+        rawcmd = (
+            opcode.value | (self.msdc_rsp[resp] << 7) | (self.block_size << 16)
+        )
 
         if opcode == Mmc.Opcode.MMC_READ_MULTIPLE_BLOCK:
             assert 0  # TODO
@@ -309,8 +319,12 @@ class Mmc:
         elif opcode == Mmc.Opcode.MMC_WRITE_BLOCK:
             rawcmd |= (1 << 11) | (1 << 13)
         elif (
-            opcode == Mmc.Opcode.MMC_SEND_EXT_CSD and cmd_type == Mmc.Flags.MMC_CMD_ADTC
-        ) or (opcode == Mmc.Opcode.MMC_SWITCH and cmd_type == Mmc.Flags.MMC_CMD_ADTC):
+            opcode == Mmc.Opcode.MMC_SEND_EXT_CSD
+            and cmd_type == Mmc.Flags.MMC_CMD_ADTC
+        ) or (
+            opcode == Mmc.Opcode.MMC_SWITCH
+            and cmd_type == Mmc.Flags.MMC_CMD_ADTC
+        ):
             rawcmd |= 1 << 11
         elif opcode == Mmc.Opcode.MMC_STOP_TRANSMISSION:
             rawcmd |= 1 << 14
@@ -328,7 +342,9 @@ class Mmc:
 
         self.cmd_resp = resp
 
-    def __msdc_command_resp_polling(self, opcode: Opcode, arg: int, flags: Flags):
+    def __msdc_command_resp_polling(
+        self, opcode: Opcode, arg: int, flags: Flags
+    ):
         cmdsts = (1 << 8) | (1 << 10) | (1 << 9)
         while True:
             intsts = self.reg_read(Mmc.Reg.MSDC_INT)
@@ -341,7 +357,11 @@ class Mmc:
         rsp = []
 
         if intsts & cmdsts:
-            if (intsts & (1 << 8)) or (intsts & (1 << 3)) or (intsts & (1 << 16)):
+            if (
+                (intsts & (1 << 8))
+                or (intsts & (1 << 3))
+                or (intsts & (1 << 16))
+            ):
                 if self.cmd_resp == self.RESP_NONE:
                     pass
                 elif self.cmd_resp == self.RESP_R2:
@@ -355,7 +375,7 @@ class Mmc:
                 if intsts & (1 << 10):
                     error = 1
                     print(
-                        "XXX CMD<%d> MSDC_INT_RSPCRCERR Arg<0x%.8x>"
+                        'XXX CMD<%d> MSDC_INT_RSPCRCERR Arg<0x%.8x>'
                         % (opcode.value, arg)
                     )
                     if opcode != Mmc.Opcode.MMC_SEND_TUNING_BLOCK:
@@ -363,7 +383,8 @@ class Mmc:
                 elif intsts & (1 << 9):
                     error = 1
                     print(
-                        "XXX CMD<%d> MSDC_INT_CMDTMO Arg<0x%.8x>" % (opcode.value, arg)
+                        'XXX CMD<%d> MSDC_INT_CMDTMO Arg<0x%.8x>'
+                        % (opcode.value, arg)
                     )
                     self.msdc_reset_hw()
 
@@ -382,7 +403,7 @@ class Mmc:
         ints = 0
         num = 1
         left = 0
-        buffer = b""
+        buffer = b''
 
         self.reg_clrbits(Mmc.Reg.MSDC_INTEN, wints)
 
@@ -393,10 +414,10 @@ class Mmc:
                 self.reg_write(Mmc.Reg.MSDC_INTEN, ints)
             if ints & (1 << 14):
                 self.msdc_reset_hw()
-                raise RuntimeError("Data timeout error")
+                raise RuntimeError('Data timeout error')
             elif ints & (1 << 15):
                 self.msdc_reset_hw()
-                raise RuntimeError("Data CRC error")
+                raise RuntimeError('Data CRC error')
             elif ints & (1 << 12):
                 get_xfer_done = True
                 if num == 0 and left == 0:
@@ -410,21 +431,24 @@ class Mmc:
                 assert left >= 4
 
                 rxfifocnt = self.reg_read(Mmc.Reg.MSDC_FIFOCS) & 0xFF
-                if left >= self.MSDC_FIFO_THD and rxfifocnt >= self.MSDC_FIFO_THD:
+                if (
+                    left >= self.MSDC_FIFO_THD
+                    and rxfifocnt >= self.MSDC_FIFO_THD
+                ):
                     count = self.MSDC_FIFO_THD // 4
                     while count > 0:
-                        buffer += pack("<I", self.reg_read(Mmc.Reg.MSDC_RXDATA))
+                        buffer += pack('<I', self.reg_read(Mmc.Reg.MSDC_RXDATA))
                         count -= 1
                     left -= self.MSDC_FIFO_THD
                 elif left < self.MSDC_FIFO_THD and rxfifocnt >= left:
                     while left > 0:
-                        buffer += pack("<I", self.reg_read(Mmc.Reg.MSDC_RXDATA))
+                        buffer += pack('<I', self.reg_read(Mmc.Reg.MSDC_RXDATA))
                         left -= 4
 
                 if left > 0:
                     ints = self.reg_read(Mmc.Reg.MSDC_INT)
                     if ints & (1 << 14):
-                        raise RuntimeError("Data timeout error")
+                        raise RuntimeError('Data timeout error')
             break
 
         return buffer
@@ -451,10 +475,10 @@ class Mmc:
                 self.reg_write(Mmc.Reg.MSDC_INT, ints)
             if ints & (1 << 14):
                 self.msdc_reset_hw()
-                raise RuntimeError("Data timeout error")
+                raise RuntimeError('Data timeout error')
             elif ints & (1 << 15):
                 self.msdc_reset_hw()
-                raise RuntimeError("Data CRC error")
+                raise RuntimeError('Data CRC error')
             elif ints & (1 << 12):
                 get_xfer_done = True
                 if num == 0 and left == 0:
@@ -472,7 +496,7 @@ class Mmc:
                     count = self.MSDC_FIFO_SZ // 4
                     while count > 0:
                         self.reg_write(
-                            Mmc.Reg.MSDC_TXDATA, unpack("<I", buffer[0:4])[0]
+                            Mmc.Reg.MSDC_TXDATA, unpack('<I', buffer[0:4])[0]
                         )
                         buffer = buffer[4:]
                         count -= 1
@@ -480,7 +504,7 @@ class Mmc:
                 elif left < self.MSDC_FIFO_SZ and txfifocnt == 0:
                     while left > 0:
                         self.reg_write(
-                            Mmc.Reg.MSDC_TXDATA, unpack("<I", buffer[0:4])[0]
+                            Mmc.Reg.MSDC_TXDATA, unpack('<I', buffer[0:4])[0]
                         )
                         buffer = buffer[4:]
                         left -= 4
@@ -528,7 +552,9 @@ class Mmc:
         self.mmc_command(
             Mmc.Opcode.MMC_GO_IDLE_STATE,
             0,
-            Mmc.Flags.MMC_RSP_SPI_R1 | Mmc.Flags.MMC_RSP_NONE | Mmc.Flags.MMC_CMD_BC,
+            Mmc.Flags.MMC_RSP_SPI_R1
+            | Mmc.Flags.MMC_RSP_NONE
+            | Mmc.Flags.MMC_CMD_BC,
         )
 
     def __mmc_send_op_cond(self, ocr):
@@ -537,7 +563,9 @@ class Mmc:
             s = self.mmc_command(
                 Mmc.Opcode.MMC_SEND_OP_COND,
                 ocr,
-                Mmc.Flags.MMC_RSP_SPI_R1 | Mmc.Flags.MMC_RSP_R3 | Mmc.Flags.MMC_CMD_BCR,
+                Mmc.Flags.MMC_RSP_SPI_R1
+                | Mmc.Flags.MMC_RSP_R3
+                | Mmc.Flags.MMC_CMD_BCR,
             )
             if s[0]:
                 break
@@ -557,7 +585,9 @@ class Mmc:
 
     def __mmc_all_send_cid(self):
         e = self.mmc_command(
-            Mmc.Opcode.MMC_ALL_SEND_CID, 0, Mmc.Flags.MMC_RSP_R2 | Mmc.Flags.MMC_CMD_BCR
+            Mmc.Opcode.MMC_ALL_SEND_CID,
+            0,
+            Mmc.Flags.MMC_RSP_R2 | Mmc.Flags.MMC_CMD_BCR,
         )
         assert e[0] == 0
         return e[1]
@@ -586,7 +616,9 @@ class Mmc:
         return self.mmc_command(
             Mmc.Opcode.MMC_SEND_STATUS,
             1 << 16,
-            Mmc.Flags.MMC_RSP_SPI_R2 | Mmc.Flags.MMC_RSP_R1 | Mmc.Flags.MMC_CMD_AC,
+            Mmc.Flags.MMC_RSP_SPI_R2
+            | Mmc.Flags.MMC_RSP_R1
+            | Mmc.Flags.MMC_CMD_AC,
         )
 
     def __mmc_switch(self, set, index, value, use_busy_signal=True):
@@ -597,7 +629,9 @@ class Mmc:
             flags |= Mmc.Flags.MMC_RSP_SPI_R1 | Mmc.Flags.MMC_RSP_R1
 
         e = self.mmc_command(
-            Mmc.Opcode.MMC_SWITCH, (3 << 24) | (index << 16) | (value << 8) | set, flags
+            Mmc.Opcode.MMC_SWITCH,
+            (3 << 24) | (index << 16) | (value << 8) | set,
+            flags,
         )
         if e[0]:
             return e
@@ -617,9 +651,11 @@ class Mmc:
                     break
 
             if status & 0xFDFFA000:
-                print("unexpected status %#08x after switch" % status, flush=True)
+                print(
+                    'unexpected status %#08x after switch' % status, flush=True
+                )
             if status & (1 << 7):
-                print("switch error", flush=True)
+                print('switch error', flush=True)
                 return 1
 
         return 0

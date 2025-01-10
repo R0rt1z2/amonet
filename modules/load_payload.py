@@ -1,8 +1,8 @@
 import struct
 
-from logger import log
-from functions import load_payload_file
 from common import CRYPTO_BASE
+from functions import load_payload_file
+from logger import log
 
 
 def init(dev):
@@ -21,15 +21,15 @@ def init(dev):
 
 
 def hw_acquire(dev):
-    dev.write32(0x10000164, (dev.read32(0x10000164) & 0xf8ffffff) | 0x1000000)
-    dev.write32(CRYPTO_BASE, (dev.read32(CRYPTO_BASE) & 0xfffffff0) | 0xf)
-    dev.write32(CRYPTO_BASE + 0x020, 0x885b)
+    dev.write32(0x10000164, (dev.read32(0x10000164) & 0xF8FFFFFF) | 0x1000000)
+    dev.write32(CRYPTO_BASE, (dev.read32(CRYPTO_BASE) & 0xFFFFFFF0) | 0xF)
+    dev.write32(CRYPTO_BASE + 0x020, 0x885B)
 
 
 def hw_release(dev):
-    dev.write32(0x10000164, dev.read32(0x10000164) & 0xf8ffffff)
-    dev.write32(CRYPTO_BASE, (dev.read32(CRYPTO_BASE) & 0xfffffff0) | 0xf)
-    dev.write32(CRYPTO_BASE + 0x020, 0x885b)
+    dev.write32(0x10000164, dev.read32(0x10000164) & 0xF8FFFFFF)
+    dev.write32(CRYPTO_BASE, (dev.read32(CRYPTO_BASE) & 0xFFFFFFF0) | 0xF)
+    dev.write32(CRYPTO_BASE + 0x020, 0x885B)
 
 
 def call_func(self, func):
@@ -61,26 +61,26 @@ def aes_read16(dev, addr):
     dev.write32(CRYPTO_BASE + 0xC18, 26)
     dev.write32(CRYPTO_BASE + 0xC1C, 26)
     if call_func(dev, 126) != 0:  # aes decrypt
-        raise Exception("failed to call the function!")
+        raise Exception('failed to call the function!')
     words = dev.read32(CRYPTO_BASE + 0xC00 + 26 * 4, 4)  # read out of the IV
-    data = b""
+    data = b''
     for word in words:
-        data += struct.pack("<I", word)
+        data += struct.pack('<I', word)
     return data
 
 
 def aes_write16(dev, addr, data):
     if len(data) != 16:
-        raise RuntimeError("data must be 16 bytes")
+        raise RuntimeError('data must be 16 bytes')
 
-    pattern = bytes.fromhex("6c38d88958fd0cf51efd9debe8c265a5")
+    pattern = bytes.fromhex('6c38d88958fd0cf51efd9debe8c265a5')
 
     # iv-xor
     words = []
     for x in range(4):
-        word = data[x * 4:(x + 1) * 4]
-        word = struct.unpack("<I", word)[0]
-        pat = struct.unpack("<I", pattern[x * 4:(x + 1) * 4])[0]
+        word = data[x * 4 : (x + 1) * 4]
+        word = struct.unpack('<I', word)[0]
+        pat = struct.unpack('<I', pattern[x * 4 : (x + 1) * 4])[0]
         words.append(word ^ pat)
 
     dev.write32(CRYPTO_BASE + 0xC00 + 18 * 4, [0] * 4)
@@ -89,36 +89,37 @@ def aes_write16(dev, addr, data):
 
     dev.write32(CRYPTO_BASE + 0xC00 + 26 * 4, words)
 
-    dev.write32(CRYPTO_BASE + 0xC04,
-                0xD848)  # src to VALID address which has all zeroes (otherwise, update pattern)
+    dev.write32(
+        CRYPTO_BASE + 0xC04, 0xD848
+    )  # src to VALID address which has all zeroes (otherwise, update pattern)
     dev.write32(CRYPTO_BASE + 0xC08, addr)  # dst to our destination
     dev.write32(CRYPTO_BASE + 0xC0C, 1)
     dev.write32(CRYPTO_BASE + 0xC14, 18)
     dev.write32(CRYPTO_BASE + 0xC18, 26)
     dev.write32(CRYPTO_BASE + 0xC1C, 26)
     if call_func(dev, 126) != 0:  # aes decrypt
-        raise RuntimeError("failed to call the function!")
+        raise RuntimeError('failed to call the function!')
 
 
 def load_payload(dev, path):
-    log("Init crypto engine")
+    log('Init crypto engine')
     init(dev)
     hw_acquire(dev)
     init(dev)
     hw_acquire(dev)
 
-    log("Disable DA verification check")
+    log('Disable DA verification check')
     addrs = [0x1201CDD4]
     for addr in addrs:
         dev.write32(addr, 0x1)
 
     payload = load_payload_file(path, 16)
     for i in range(0, len(payload), 16):
-        aes_write16(dev, 0x80001000 + i, payload[i: i + 16])
+        aes_write16(dev, 0x80001000 + i, payload[i : i + 16])
 
     log("Let's rock")
     dev.jump_da(0x80001000)
 
-    log("Wait for the payload to come online...")
-    dev.wait_payload(b"\xB1\xB2\xB3\xB4")
-    log("all good")
+    log('Wait for the payload to come online...')
+    dev.wait_payload(b'\xb1\xb2\xb3\xb4')
+    log('all good')

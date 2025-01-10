@@ -5,12 +5,12 @@ from common import Device
 from logger import log
 
 
-def handshake2(dev, cmd="FACTFACT"):
-    log("Handshake")
+def handshake2(dev, cmd='FACTFACT'):
+    log('Handshake')
     dev.handshake2(cmd)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     if len(sys.argv) > 2:
         dev = Device(sys.argv[2])
     else:
@@ -20,5 +20,5 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         cmd = sys.argv[1]
     else:
-        cmd = "FACTFACT"
+        cmd = 'FACTFACT'
     handshake2(dev, cmd)

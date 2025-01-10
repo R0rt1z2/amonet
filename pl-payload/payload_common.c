@@ -109,6 +109,13 @@ void command_loop(struct msdc_host *host) {
             send_data((char*)address, size);
             break;
         }
+        case 0x5001: {
+            uint32_t address = recv_dword();
+            uint32_t size = recv_dword();
+            printf("Write %d Bytes to address 0x%08X\n", size, address);
+            recv_data((char*)address, size, 0);
+            break;
+        }
         case 0x7000: {
             char idme_buf[0x400] = { 0 };
             char field_name[16] = { 0 };
@@ -172,7 +179,7 @@ void command_loop(struct msdc_host *host) {
         }
         case 0x3000: {
             printf("Reboot\n");
-            volatile uint32_t *reg = (volatile uint32_t *)0x10007000;
+            volatile uint32_t *reg = (volatile uint32_t *)0x10000000;
             reg[8/4] = 0x1971;
             reg[0/4] = 0x22000014;
             reg[0x14/4] = 0x1209;
@@ -183,7 +190,7 @@ void command_loop(struct msdc_host *host) {
         }
         case 0x3001: {
             printf("Kick watchdog\n");
-            volatile uint32_t *reg = (volatile uint32_t *)0x10007000;
+            volatile uint32_t *reg = (volatile uint32_t *)0x10000000;
             reg[8/4] = 0x1971;
             break;
         }

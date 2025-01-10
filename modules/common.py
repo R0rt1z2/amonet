@@ -1,6 +1,6 @@
+import glob
 import struct
 import sys
-import glob
 import time
 
 import serial
@@ -15,7 +15,7 @@ TIMEOUT = 5
 CRYPTO_BASE = 0x11018000  # for ariel
 
 
-def serial_ports(vid="0E8D", pid="3000"):
+def serial_ports(vid='0E8D', pid='3000'):
     """Lists available serial ports
 
     :raises EnvironmentError:
@@ -27,7 +27,7 @@ def serial_ports(vid="0E8D", pid="3000"):
     result = set()
     ports = list(serial.tools.list_ports.comports())
     for port in ports:
-        if hasattr(port, "hwid"):
+        if hasattr(port, 'hwid'):
             portHwid = port.hwid
             portDevice = port.device
         else:
@@ -45,15 +45,17 @@ def serial_ports(vid="0E8D", pid="3000"):
 
 
 def p32_be(x):
-    return struct.pack(">I", x)
+    return struct.pack('>I', x)
 
-def to_bytes(data, size = 1, endian = ">"):
+
+def to_bytes(data, size=1, endian='>'):
     if size == 4:
-        return struct.pack(endian + "I", data)
+        return struct.pack(endian + 'I', data)
     elif size == 2:
-        return struct.pack(endian + "H", data)
+        return struct.pack(endian + 'H', data)
     else:
-        return struct.pack(endian + "B", data)
+        return struct.pack(endian + 'B', data)
+
 
 class Device:
     def __init__(self, port=None):
@@ -70,11 +72,11 @@ class Device:
 
     def find_device(self):
         if self.dev:
-            return log("Device already found")
+            return log('Device already found')
 
-        log("Waiting for preloader")
-        vid = "0E8D"
-        pid = "3000"
+        log('Waiting for preloader')
+        vid = '0E8D'
+        pid = '3000'
 
         old = serial_ports(vid, pid)
         while True:
@@ -90,7 +92,7 @@ class Device:
 
             time.sleep(0.25)
 
-        log("Found port = {}".format(port))
+        log('Found port = {}'.format(port))
 
         self.dev = serial.Serial(port, BAUD, timeout=TIMEOUT)
 
@@ -99,10 +101,10 @@ class Device:
             print(test)
             print(gold)
             # print("ERROR: Serial protocol mismatch")
-            raise RuntimeError("ERROR: Serial protocol mismatch")
+            raise RuntimeError('ERROR: Serial protocol mismatch')
 
     def check_int(self, test, gold):
-        test = struct.unpack(">I", test)[0]
+        test = struct.unpack('>I', test)[0]
         self.check(test, gold)
 
     def _writeb(self, out_str):
@@ -112,22 +114,22 @@ class Device:
     def handshake(self):
         # look for start byte
         while True:
-            c = self._writeb(b"\xa0")
-            if c == b"\x5f":
+            c = self._writeb(b'\xa0')
+            if c == b'\x5f':
                 break
             self.dev.flushInput()
 
         # complete sequence
-        self.check(self._writeb(b"\x0a"), b"\xf5")
-        self.check(self._writeb(b"\x50"), b"\xaf")
-        self.check(self._writeb(b"\x05"), b"\xfa")
+        self.check(self._writeb(b'\x0a'), b'\xf5')
+        self.check(self._writeb(b'\x50'), b'\xaf')
+        self.check(self._writeb(b'\x05'), b'\xfa')
 
-    def handshake2(self, cmd="FACTFACT"):
+    def handshake2(self, cmd='FACTFACT'):
         # look for start byte
         c = 0
-        while c != b"Y":
+        while c != b'Y':
             c = self.dev.read()
-        log("Preloader ready, sending " + cmd)
+        log('Preloader ready, sending ' + cmd)
         command = str.encode(cmd)
         self.dev.write(command)
         self.dev.flushInput()
@@ -135,22 +137,22 @@ class Device:
     def read32(self, addr, size=1):
         result = []
 
-        self.dev.write(b"\xd1")
-        self.check(self.dev.read(1), b"\xd1")  # echo cmd
+        self.dev.write(b'\xd1')
+        self.check(self.dev.read(1), b'\xd1')  # echo cmd
 
-        self.dev.write(struct.pack(">I", addr))
+        self.dev.write(struct.pack('>I', addr))
         self.check_int(self.dev.read(4), addr)  # echo addr
 
-        self.dev.write(struct.pack(">I", size))
+        self.dev.write(struct.pack('>I', size))
         self.check_int(self.dev.read(4), size)  # echo size
 
-        self.check(self.dev.read(2), b"\x00\x00")  # arg check
+        self.check(self.dev.read(2), b'\x00\x00')  # arg check
 
         for _ in range(size):
-            data = struct.unpack(">I", self.dev.read(4))[0]
+            data = struct.unpack('>I', self.dev.read(4))[0]
             result.append(data)
 
-        self.check(self.dev.read(2), b"\x00\x00")  # status
+        self.check(self.dev.read(2), b'\x00\x00')  # status
 
         # support scalar
         if len(result) == 1:
@@ -163,36 +165,36 @@ class Device:
         if not isinstance(words, list):
             words = [words]
 
-        self.dev.write(b"\xd4")
-        self.check(self.dev.read(1), b"\xd4")  # echo cmd
+        self.dev.write(b'\xd4')
+        self.check(self.dev.read(1), b'\xd4')  # echo cmd
 
-        self.dev.write(struct.pack(">I", addr))
+        self.dev.write(struct.pack('>I', addr))
         self.check_int(self.dev.read(4), addr)  # echo addr
 
-        self.dev.write(struct.pack(">I", len(words)))
+        self.dev.write(struct.pack('>I', len(words)))
         self.check_int(self.dev.read(4), len(words))  # echo size
 
-        self.check(self.dev.read(2), b"\x00\x00")  # arg check
+        self.check(self.dev.read(2), b'\x00\x00')  # arg check
 
         for word in words:
-            self.dev.write(struct.pack(">I", word))
+            self.dev.write(struct.pack('>I', word))
             self.check_int(self.dev.read(4), word)  # echo word
 
         if status_check:
-            self.check(self.dev.read(2), b"\x00\x00")  # status
+            self.check(self.dev.read(2), b'\x00\x00')  # status
 
     def jump_da(self, addr):
         self.dev.write(b'\xd5')
-        self.check(self.dev.read(1), b'\xd5') # echo cmd
+        self.check(self.dev.read(1), b'\xd5')  # echo cmd
 
-        self.dev.write(struct.pack(">I", addr))
-        self.check_int(self.dev.read(4), addr) # echo addr
+        self.dev.write(struct.pack('>I', addr))
+        self.check_int(self.dev.read(4), addr)  # echo addr
 
-        self.check(self.dev.read(2), b'\x00\x00') # status
+        self.check(self.dev.read(2), b'\x00\x00')  # status
 
     def run_ext_cmd(self, cmd):
-        self.dev.write(b"\xC8")
-        self.check(self.dev.read(1), b"\xC8")  # echo cmd
+        self.dev.write(b'\xc8')
+        self.check(self.dev.read(1), b'\xc8')  # echo cmd
         cmd = bytes([cmd])
         self.dev.write(cmd)
         self.check(self.dev.read(1), cmd)
@@ -202,7 +204,9 @@ class Device:
     def wait_payload(self, pattern, size=4):
         data = self.dev.read(size)
         if data != pattern:
-            raise RuntimeError("received {} instead of expected pattern".format(data))
+            raise RuntimeError(
+                'received {} instead of expected pattern'.format(data)
+            )
 
     def emmc_read(self, idx):
         # magic
@@ -214,13 +218,13 @@ class Device:
 
         data = self.dev.read(0x200)
         if len(data) != 0x200:
-            raise RuntimeError("read fail")
+            raise RuntimeError('read fail')
 
         return data
 
     def emmc_write(self, idx, data):
         if len(data) != 0x200:
-            raise RuntimeError("data must be 0x200 bytes")
+            raise RuntimeError('data must be 0x200 bytes')
 
         # magic
         self.dev.write(p32_be(0xF00DD00D))
@@ -232,8 +236,8 @@ class Device:
         self.dev.write(data)
 
         code = self.dev.read(4)
-        if code != b"\xd0\xd0\xd0\xd0":
-            raise RuntimeError("device failure")
+        if code != b'\xd0\xd0\xd0\xd0':
+            raise RuntimeError('device failure')
 
     def emmc_switch(self, part):
         # magic
@@ -247,6 +251,12 @@ class Device:
         self.write32(0x10000020, 0x1971)
         self.write32(0x10000000, 0x22000014)
         self.write32(0x10000014, 0x1209)
+
+    def payload_reboot(self):
+        # magic
+        self.dev.write(p32_be(0xF00DD00D))
+        # cmd
+        self.dev.write(p32_be(0x3000))
 
     def kick_watchdog(self):
         # magic
@@ -262,13 +272,41 @@ class Device:
 
         data = self.dev.read(0x100)
         if len(data) != 0x100:
-            raise RuntimeError("read fail")
+            raise RuntimeError('read fail')
 
         return data
 
+    def mem_read(self, address, size):
+        # magic
+        self.dev.write(p32_be(0xF00DD00D))
+        # cmd
+        self.dev.write(p32_be(0x5000))
+        # address
+        self.dev.write(p32_be(address))
+        # size
+        self.dev.write(p32_be(size))
+
+        data = self.dev.read(size)
+        if len(data) != size:
+            raise RuntimeError('read fail')
+
+        return data
+
+    def mem_write(self, address, data):
+        # magic
+        self.dev.write(p32_be(0xF00DD00D))
+        # cmd
+        self.dev.write(p32_be(0x5001))
+        # address
+        self.dev.write(p32_be(address))
+        # size
+        self.dev.write(p32_be(len(data)))
+        # data
+        self.dev.write(data)
+
     def rpmb_write(self, data):
         if len(data) != 0x100:
-            raise RuntimeError("data must be 0x100 bytes")
+            raise RuntimeError('data must be 0x100 bytes')
 
         # magic
         self.dev.write(p32_be(0xF00DD00D))
@@ -279,24 +317,24 @@ class Device:
 
     def idme_read(self, field_name):
         # magic
-        self.dev.write(p32_be(0xf00dd00d))
+        self.dev.write(p32_be(0xF00DD00D))
         # cmd
         self.dev.write(p32_be(0x7000))
 
         if len(field_name) < 16:
-            field_name += b"\x00" * (16 - len(field_name))
+            field_name += b'\x00' * (16 - len(field_name))
         self.dev.write(field_name)
 
-        size = int.from_bytes(self.dev.read(4), byteorder="big")
+        size = int.from_bytes(self.dev.read(4), byteorder='big')
         data = self.dev.read(size)
-        if len(data) != size or data == to_bytes(0xffffffff, 4):
-            raise RuntimeError("read fail")
+        if len(data) != size or data == to_bytes(0xFFFFFFFF, 4):
+            raise RuntimeError('read fail')
 
-        elif data == to_bytes(0xbeefdeed, 4):
-            raise RuntimeError("IDME invalid")
+        elif data == to_bytes(0xBEEFDEED, 4):
+            raise RuntimeError('IDME invalid')
 
-        elif data == to_bytes(0xdeadbeef, 4):
-            log(field_name + " not found in IDME")
+        elif data == to_bytes(0xDEADBEEF, 4):
+            log(field_name + ' not found in IDME')
             return None
 
         return data
