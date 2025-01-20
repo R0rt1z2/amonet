@@ -1,6 +1,7 @@
 #!/sbin/sh -x
 # amonet updater
 # Copyright (C) 2019 k4y0z @ xda-developers
+# Copyright (C) 2024-2025 Roger Ortiz (R0rt1z2)
 
 PART_PREFIX=/dev/block/platform/mtk-msdc.0/by-name
 
@@ -20,48 +21,72 @@ umask 022
 ##########################################################################################
 
 ui_print() {
-  $bootMode && echo -e "$1" || echo -e "ui_print $1\nui_print" >> /proc/self/fd/$outFD
+    $bootMode && echo -e "$1" || echo -e "ui_print $1\nui_print" >>/proc/self/fd/$outFD
 }
 
-# not a function, but must be here
-if $bootMode; then
-  ui_print " "
-  ui_print "(!) Boot mode install is not supported"
-  ui_print "- Install from recovery mode"
-  ui_print " "
-  exit 1
-fi
-
-grep_prop() {
-  REGEX="s/^$1=//p"
-  shift
-  FILES=$@
-  [ -z "$FILES" ] && FILES='/default.prop'
-  sed -n "$REGEX" $FILES 2>/dev/null | head -n 1
-}
-
-check_product() {
-  product=$(grep_prop ro.product.device)
-
-  if [ "$product" != "${1}" ] ; then
-    ui_print "This is only for the \"${1}\"${2}, your device is a \"${product}\""
+check_exit_status() {
+  if [ $? -ne 0 ]; then
+    ui_print "$1"
     exit 1
   fi
 }
 
+# not a function, but must be here
+if $bootMode; then
+    ui_print " "
+    ui_print "(!) Boot mode install is not supported"
+    ui_print "- Install from recovery mode"
+    ui_print " "
+    exit 1
+fi
+
+grep_prop() {
+    REGEX="s/^$1=//p"
+    shift
+    FILES=$@
+    [ -z "$FILES" ] && FILES='/default.prop'
+    sed -n "$REGEX" $FILES 2>/dev/null | head -n 1
+}
+
+check_product() {
+    product=$(grep_prop ro.product.device)
+
+    if [ "$product" != "${1}" ]; then
+        ui_print "This is only for the \"${1}\"${2}, your device is a \"${product}\""
+        exit 1
+    fi
+}
+
 check_mount() {
-  if [ ! -d ${2} ] ; then
-    mkdir ${2}
-  fi
+    if [ ! -d ${2} ]; then
+        mkdir ${2}
+    fi
 
-  grep -r ${2} /proc/mounts
-  if [ $? -eq 1 ] ; then
-    mount ${PART_PREFIX}/${1} ${2}
-  fi
+    grep -r ${2} /proc/mounts
+    if [ $? -eq 1 ]; then
+        mount ${PART_PREFIX}/${1} ${2}
+    fi
 
-  if [ $? -ne 0 ] ; then
-    ui_print "Failed to mount ${1}"
+    if [ $? -ne 0 ]; then
+        ui_print "Failed to mount ${1}"
+    fi
+}
+
+# backwards compatible dd (for older TWRP)
+ddx() {
+  ${INSTALLER}/amonet/bin/busybox dd "$@"
+  if [ $? -ne 0 ]; then
+    ui_print "Failed to execute dd with arguments: $*"
+    ui_print "This could be a FATAL error, DON'T REBOOT!"
+    ui_print "Please report this issue and attach your GPT backup"
+    exit 1
   fi
+}
+
+backup_gpt() {
+  ddx if=/dev/block/mmcblk0 of="$1" bs=512 count=34
+  check_exit_status "Failed to backup GPT to $1!"
+  ui_print "GPT backup saved to $1"
 }
 
 ##########################################################################################
@@ -76,23 +101,21 @@ ZIP="$3"
 
 readlink /proc/$$/fd/$outFD 2>/dev/null | grep /tmp >/dev/null
 if [ "$?" -eq "0" ]; then
-  outFD=0
+    outFD=0
 
-  for FD in `ls /proc/$$/fd`; do
-  readlink /proc/$$/fd/$FD 2>/dev/null | grep pipe >/dev/null
-  if [ "$?" -eq "0" ]; then
-    ps | grep " 3 $FD " | grep -v grep >/dev/null
-    if [ "$?" -eq "0" ]; then
-    outFD=$FD
-    break
-    fi
-  fi
-  done
+    for FD in $(ls /proc/$$/fd); do
+        readlink /proc/$$/fd/$FD 2>/dev/null | grep pipe >/dev/null
+        if [ "$?" -eq "0" ]; then
+            ps | grep " 3 $FD " | grep -v grep >/dev/null
+            if [ "$?" -eq "0" ]; then
+                outFD=$FD
+                break
+            fi
+        fi
+    done
 fi
 
 check_product "ariel" " - Amazon Fire HD6 / HD7 (4th generation) - "
-
-check_recovery
 
 TMPDIR=/dev/tmp
 INSTALLER=$TMPDIR/install
@@ -102,6 +125,10 @@ rm -rf $TMPDIR 2>/dev/null
 mkdir -p $INSTALLER 2>/dev/null
 
 unzip -o "$ZIP" 'amonet/bin/busybox' 'amonet/bin/lk.bin' 'amonet/bin/tz.img' 'amonet/bin/preloader.bin' 'amonet/bin/twrp.img' 'amonet/bin/boot.hdr' 'amonet/bin/boot.payload' 'amonet/bin/gpt-ariel-8G-amonet.bin' 'amonet/bin/gpt-ariel-16G-amonet.bin' 'amonet/bin/boot-recovery.bin' -d $INSTALLER >&2
+check_exit_status "Failed to extract required files!"
+
+# better safe than sorry
+chmod 755 ${INSTALLER}/amonet/bin/busybox
 
 ##########################################################################################
 # Main
@@ -111,110 +138,118 @@ ui_print " "
 ui_print "amonet installer for ariel"
 
 STORAGE_MODEL="8G"
-if [ -f /sys/block/mmcblk0/size ] ; then
-  MMC_SIZE=$(cat /sys/block/mmcblk0/size)
-  if [ $MMC_SIZE -eq 15269888 ] ; then
-    ui_print "8GB model detected"
-  elif [ $MMC_SIZE -eq 30535680 ] ; then
-    ui_print "16GB model detected"
-    STORAGE_MODEL="16G"
-  else
-    ui_print "Unknown MMC size: $MMC_SIZE"
-    exit 1
-  fi
+if [ -f /sys/block/mmcblk0/size ]; then
+    MMC_SIZE=$(cat /sys/block/mmcblk0/size)
+    if [ $MMC_SIZE -ge 14000000 ] && [ $MMC_SIZE -le 18000000 ]; then
+        ui_print "8 GB model detected"
+        STORAGE_MODEL="8G"
+    elif [ $MMC_SIZE -ge 29000000 ] && [ $MMC_SIZE -le 35000000 ]; then
+        ui_print "16 GB model detected"
+        STORAGE_MODEL="16G"
+    else
+        ui_print "Unknown eMMC size: $MMC_SIZE (assuming 8 GB model)"
+        ui_print "Consider backing up your GPT and report this issue"
+    fi
 fi
 
 # Check if gpt is already modified
-GPT_DATA=$(dd if=/dev/block/mmcblk0 bs=512 count=34 2> /dev/null)
+GPT_DATA=$(dd if=/dev/block/mmcblk0 bs=512 count=34 2>/dev/null)
 echo "$GPT_DATA" | grep -q boot_x
-if [ $? -eq 0 ] ; then
-	ui_print "GPT is already modified, updating amonet..."
-	UPDATE=1
+if [ $? -eq 0 ]; then
+    ui_print "GPT is already modified, updating amonet..."
+    UPDATE=1
 else
-  echo "$GPT_DATA" | grep -q boot_tmp
-	if [ $? -eq 0 ] ; then
-		ui_print "Partially modified GPT detected, forcing reinstall..."
-	fi
+    echo "$GPT_DATA" | grep -q boot_tmp
+    if [ $? -eq 0 ]; then
+        ui_print "Partially modified GPT detected, forcing reinstall..."
+    fi
 fi
 
-if [ ! $UPDATE ] ; then
-  check_mount persisbackup /persistbackup
-  check_mount userdata /data
+if [ ! $UPDATE ]; then
+    check_mount persisbackup /persistbackup
+    check_mount userdata /data
 
-  ${INSTALLER}/amonet/bin/busybox dd if=/dev/block/mmcblk0 of=/persistbackup/gpt-ariel-${STORAGE_MODEL}.bin bs=512 count=34
-  ${INSTALLER}/amonet/bin/busybox dd if=/dev/block/mmcblk0 of=/data/gpt-ariel-${STORAGE_MODEL}.bin bs=512 count=34
-
-  ui_print "GPT backup saved to /persistbackup/gpt-ariel-${STORAGE_MODEL}.bin"
-  ui_print "GPT backup saved to /data/gpt-ariel-${STORAGE_MODEL}.bin"
+    backup_gpt /persistbackup/gpt-ariel-${STORAGE_MODEL}.bin
+    backup_gpt /data/gpt-ariel-${STORAGE_MODEL}.bin
 fi
 
-if [ -L $PART_PREFIX/UBOOT_real ] ; then
-	REAL_SUFFIX=_real
+if [ -L $PART_PREFIX/UBOOT_real ]; then
+    REAL_SUFFIX=_real
 fi
 
-if [ -L $PART_PREFIX/boot_amonet ] ; then
-	AMONET_SUFFIX=_amonet
+if [ -L $PART_PREFIX/boot_amonet ]; then
+    AMONET_SUFFIX=_amonet
 fi
 
-if [ $UPDATE ] ; then
-	ui_print "- updating TWRP"
-	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/twrp.img of=${PART_PREFIX}/recovery_x
-	ui_print "- updating LK"
-	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/lk.bin of=${PART_PREFIX}/UBOOT${REAL_SUFFIX} bs=512
-	ui_print "- updating TZ"
-	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/tz.img of=${PART_PREFIX}/TEE2${REAL_SUFFIX} bs=512
-	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/tz.img of=${PART_PREFIX}/TEE1${REAL_SUFFIX} bs=512
-	ui_print "- updating payload"
-	dd if=${INSTALLER}/amonet/bin/boot.hdr of=${PART_PREFIX}/boot${AMONET_SUFFIX} bs=512
-	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/boot.payload of=${PART_PREFIX}/boot${AMONET_SUFFIX} bs=512 seek=${PAYLOAD_BLOCK}
-	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/boot.hdr of=${PART_PREFIX}/recovery${AMONET_SUFFIX} bs=512
-	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/boot.payload of=${PART_PREFIX}/recovery${AMONET_SUFFIX} bs=512 seek=${PAYLOAD_BLOCK}
-	ui_print "- Update complete"
-	ui_print " "
+if [ $UPDATE ]; then
+    ui_print "- updating TWRP"
+    ddx if=${INSTALLER}/amonet/bin/twrp.img of=${PART_PREFIX}/recovery_x
+
+    ui_print "- updating LK"
+    ddx if=${INSTALLER}/amonet/bin/lk.bin of=${PART_PREFIX}/UBOOT${REAL_SUFFIX} bs=512
+    ui_print ""
+
+    ui_print "- updating TZ"
+    ddx if=${INSTALLER}/amonet/bin/tz.img of=${PART_PREFIX}/TEE2${REAL_SUFFIX} bs=512
+    ddx if=${INSTALLER}/amonet/bin/tz.img of=${PART_PREFIX}/TEE1${REAL_SUFFIX} bs=512
+    ui_print ""
+
+    ui_print "- updating payload"
+    dd if=${INSTALLER}/amonet/bin/boot.hdr of=${PART_PREFIX}/boot${AMONET_SUFFIX} bs=512
+    ddx if=${INSTALLER}/amonet/bin/boot.payload of=${PART_PREFIX}/boot${AMONET_SUFFIX} bs=512 seek=${PAYLOAD_BLOCK}
+    ddx if=${INSTALLER}/amonet/bin/boot.hdr of=${PART_PREFIX}/recovery${AMONET_SUFFIX} bs=512
+    ddx if=${INSTALLER}/amonet/bin/boot.payload of=${PART_PREFIX}/recovery${AMONET_SUFFIX} bs=512 seek=${PAYLOAD_BLOCK}
+    ui_print ""
+
+    sync
+
+    ui_print "- Update complete"
+    ui_print ""
 else
-	ui_print "Installing amonet / Unlocking bootloader..."
-	ui_print ""
-  ui_print "If this is not what you want, turn off the device now!"
-	ui_print ""
-	ui_print "Waiting 30 seconds before continuing..."
-	ui_print ""
+    ui_print "Installing amonet / Unlocking bootloader..."
+    ui_print ""
+    ui_print "If this is not what you want, turn off the device now!"
+    ui_print ""
+    ui_print "Waiting 30 seconds before continuing..."
+    ui_print ""
 
-	sleep 30
+    sleep 30
 
-	ui_print "- flashing LK"
-	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/lk.bin of=${PART_PREFIX}/UBOOT${REAL_SUFFIX} bs=512
-	ui_print ""
+    ui_print "- flashing LK"
+    ddx if=${INSTALLER}/amonet/bin/lk.bin of=${PART_PREFIX}/UBOOT${REAL_SUFFIX} bs=512
+    ui_print ""
 
-	ui_print "- flashing TZ"
-	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/tz.img of=${PART_PREFIX}/TEE1${REAL_SUFFIX} bs=512
-	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/tz.img of=${PART_PREFIX}/TEE2${REAL_SUFFIX} bs=512
-	ui_print ""
+    ui_print "- flashing TZ"
+    ddx if=${INSTALLER}/amonet/bin/tz.img of=${PART_PREFIX}/TEE1${REAL_SUFFIX} bs=512
+    ddx if=${INSTALLER}/amonet/bin/tz.img of=${PART_PREFIX}/TEE2${REAL_SUFFIX} bs=512
+    ui_print ""
 
-	ui_print "- flashing payload"
-	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/boot.hdr of=/dev/block/mmcblk0 seek=${BOOT_OFFSET} bs=512
-	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/boot.payload of=/dev/block/mmcblk0 seek=$(( BOOT_OFFSET + PAYLOAD_BLOCK )) bs=512
-	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/boot.hdr of=/dev/block/mmcblk0 seek=${RECOVERY_OFFSET} bs=512
-	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/boot.payload of=/dev/block/mmcblk0 seek=$(( RECOVERY_OFFSET + PAYLOAD_BLOCK )) bs=512
-	ui_print ""
+    ui_print "- flashing payload"
+    ddx if=${INSTALLER}/amonet/bin/boot.hdr of=/dev/block/mmcblk0 seek=${BOOT_OFFSET} bs=512
+    ddx if=${INSTALLER}/amonet/bin/boot.payload of=/dev/block/mmcblk0 seek=$((BOOT_OFFSET + PAYLOAD_BLOCK)) bs=512
+    ddx if=${INSTALLER}/amonet/bin/boot.hdr of=/dev/block/mmcblk0 seek=${RECOVERY_OFFSET} bs=512
+    ddx if=${INSTALLER}/amonet/bin/boot.payload of=/dev/block/mmcblk0 seek=$((RECOVERY_OFFSET + PAYLOAD_BLOCK)) bs=512
+    ui_print ""
 
-	ui_print "- flashing TWRP"
-	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/twrp.img of=${PART_PREFIX}/recovery
-	ui_print ""
+    ui_print "- flashing TWRP"
+    ddx if=${INSTALLER}/amonet/bin/twrp.img of=${PART_PREFIX}/recovery
+    ui_print ""
 
-	ui_print "- flashing GPT"
-	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/gpt-ariel-${STORAGE_MODEL}-amonet.bin of=/dev/block/mmcblk0 bs=512 count=34
-	ui_print ""
+    ui_print "- flashing GPT"
+    ddx if=${INSTALLER}/amonet/bin/gpt-ariel-${STORAGE_MODEL}-amonet.bin of=/dev/block/mmcblk0 bs=512 count=34
+    ui_print ""
 
-	ui_print "- preparing wipe flag"
-	${INSTALLER}/amonet/bin/busybox dd if=${INSTALLER}/amonet/bin/boot-recovery.bin of=${PART_PREFIX}/MISC
+    ui_print "- preparing wipe flag"
+    ddx if=${INSTALLER}/amonet/bin/boot-recovery.bin of=${PART_PREFIX}/MISC
+    ui_print ""
 
-	sync
+    sync
 
-	ui_print "Rebooting to TWRP in 5 Seconds..."
-	sleep 5
-	reboot recovery
-	ui_print ""
-	exit 0
+    ui_print "Rebooting to TWRP in 5 Seconds..."
+    sleep 5
+    reboot recovery
+    ui_print ""
+    exit 0
 fi
 
 exit 0
