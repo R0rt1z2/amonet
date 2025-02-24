@@ -97,6 +97,16 @@ bool is_power_key_pressed(void) {
 int (*original_read)(part_dev_t *dev, uint64_t dev_addr, void *dst, uint32_t size) = (void*)(0x81e0a2d0|1);
 int (*app)() = (void*)(0x81e3cb98|1);
 
+void (*fastboot_info)(const char *reason) = (void *)(0x81e3d064 | 1);
+void (*fastboot_fail)(const char *reason) = (void *)(0x81e3d0a8 | 1);
+void (*fastboot_okay)(const char *reason) = (void *)(0x81e3d0c8 | 1);
+
+void (*fastboot_register)(const char *prefix, 
+                          void (*handle)(const char *arg, void *data, unsigned sz), 
+                          unsigned char security_enabled) = (void *)(0x81e3cccc | 1);
+
+void (*mtk_arch_reset)(char mode) = (void *)(0x81e17fe4 | 1);
+
 uint64_t g_boot, g_boot_x, g_lk, g_misc, g_recovery, g_recovery_x;
 
 int read_func(part_dev_t *dev, uint64_t block_off, void *dst, uint32_t sz) {
@@ -148,6 +158,16 @@ static void parse_gpt() {
             printf("found recovery_x at 0x%08X\n", start);
         }
     }
+}
+
+void cmd_reboot_recovery(const char *arg, void *data, unsigned sz) {
+    part_dev_t *dev = get_device();
+    uint8_t bootloader_msg[0x20] = { 0 };
+    memcpy(bootloader_msg, "boot-recovery", 13);
+    dev->write(dev, bootloader_msg, (g_misc * 0x200) + 0x1000000, 0x50);
+    fastboot_info("Rebooting device into recovery mode...");
+    fastboot_okay("");
+    mtk_arch_reset(1); // bypass power key (1)
 }
 
 __attribute__((section(".text.start"))) int main() {
@@ -264,6 +284,14 @@ __attribute__((section(".text.start"))) int main() {
     // device is unlocked
     uint8_t **unlocked = (uint8_t**)0x81e81258;
     (*unlocked)[0x16] = 0x1;
+
+    // remove broken oem reboot-recovery
+    patch = (void*)0x81e3d3a4;
+    *patch = 0x46c0;
+    *(patch + 1) = 0x46c0;
+
+    // register an actual working implementation
+    fastboot_register("oem reboot-recovery", cmd_reboot_recovery, 1);
 
     // printf("(void*)dev->read 0x%08X\n", (void*)dev->read);
     // printf("(void*)&dev->read 0x%08X\n", (void*)&dev->read);
