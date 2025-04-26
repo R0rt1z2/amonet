@@ -1,10 +1,13 @@
 # amonet
-This is a MediaTek bootrom exploit for Meizu M2.  
-Exploit is made by [xyzz](https://github.com/xyzz/amonet).  
+
+This is an exploit chain for Huawei Y5 (2017) (`maya`).
+
+It contains a MediaTek preloader exploit and a LittleKernel bootloader exploit.
+
+I take no responsibility for any damage caused by using this.
 
 ## License
-`brom-payload` includes code from Linux kernel, and is therefore licensed under GPLv2.
 
-`modules`  are licensed under MIT.
+`lk-payload`, `pl-payload` and `modules` are licensed under MIT.
 
 See LICENSE.MIT and LICENSE.GPL2 for more details.

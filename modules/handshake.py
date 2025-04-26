@@ -3,14 +3,16 @@ import sys
 from common import Device
 from logger import log
 
-def handshake(dev, disable_watchdog=False):
-    log("Handshake")
-    dev.handshake()
-    if disable_watchdog:
-        log("Disable watchdog")
-        dev.write32(0x10212000, 0x22000000)
 
-if __name__ == "__main__":
+def handshake(dev, skip_handshake=False):
+    if not skip_handshake:
+        log('Handshake')
+        dev.handshake()
+    log('Disable watchdog')
+    dev.write32(0x10212000, 0x22000000)
+
+
+if __name__ == '__main__':
     if len(sys.argv) > 1:
         dev = Device(sys.argv[1])
     else:
