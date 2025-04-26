@@ -354,30 +354,30 @@ def modify_step2(part_list):
 
 def unpatch(gpt_header, part_list):
     part_list_n = part_list.copy()
-    part_n = len(part_list) - 1
-    partition = part_list_n[len(part_list_n) - 3]
-
-    assert (
-        partition["name"].decode("utf-16le").rstrip("\x00") == "userdata"
-    ), "userdata is not where it is expected, refusing to unpatch"
-
+    
+    userdata_index = None
+    for i, partition in enumerate(part_list_n):
+        if partition["name"].decode("utf-16le").rstrip("\x00") == "userdata":
+            userdata_index = i
+            break
+    
+    assert userdata_index is not None, "No userdata partition found, refusing to unpatch"
+    
+    partition = part_list_n[userdata_index]
+    
     partition["end"] = gpt_header["last_lba"]
-    part_list_n[len(part_list_n) - 2] = {
-        "type_guid": b"\x00",
-        "guid": b"\x00",
-        "start": 0,
-        "end": 0,
-        "attrib": 0,
-        "name": b"\x00",
-    }
-    part_list_n[len(part_list_n) - 1] = {
-        "type_guid": b"\x00",
-        "guid": b"\x00",
-        "start": 0,
-        "end": 0,
-        "attrib": 0,
-        "name": b"\x00",
-    }
+    
+    for i, part in enumerate(part_list_n):
+        part_name = part["name"].decode("utf-16le").rstrip("\x00")
+        if part_name in ["boot_tmp", "recovery_tmp"]:
+            part_list_n[i] = {
+                "type_guid": b"\x00",
+                "guid": b"\x00",
+                "start": 0,
+                "end": 0,
+                "attrib": 0,
+                "name": b"\x00",
+            }
 
     partition = get_part_by_name(part_list_n, "boot_x")
     if partition:
@@ -386,6 +386,7 @@ def unpatch(gpt_header, part_list):
     partition = get_part_by_name(part_list_n, "recovery_x")
     if partition:
         partition["name"] = "recovery".encode("utf-16le") + b"\x00\x00"
+    
     return part_list_n
 
 
