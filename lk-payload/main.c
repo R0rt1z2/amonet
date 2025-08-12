@@ -23,8 +23,8 @@ void _putchar(char character)
     low_uart_put(character);
 }
 
-int (*original_read)(struct device_t *dev, uint64_t block_off, void *dst, size_t sz, int part) = (void*)0x4BD30181;
-int (*app)() = (void*)0x4BD398AC;
+int (*original_read)(struct device_t *dev, uint64_t block_off, void *dst, size_t sz, int part) = (void*)(0x4bd2fff9|1);
+int (*app)() = (void*)(0x4bd39864|1);
 
 uint64_t g_boot, g_boot_x, g_lk, g_misc, g_recovery, g_recovery_x;
 
@@ -48,9 +48,12 @@ int read_func(struct device_t *dev, uint64_t block_off, void *dst, size_t sz, in
 }
 
 static void parse_gpt() {
+    printf("Parsing GPT...\n");
     uint8_t raw[0x1000] = { 0 };
     struct device_t *dev = get_device();
+    printf("dev 0x%08X\n", dev);
     dev->read(dev, 0x400, raw, sizeof(raw), USER_PART);
+    printf("raw 0x%08X\n", raw);
     for (int i = 0; i < sizeof(raw) / 0x80; ++i) {
         uint8_t *ptr = &raw[i * 0x80];
         uint8_t *name = ptr + 0x38;
@@ -80,9 +83,8 @@ static void parse_gpt() {
 
 int main() {
     int ret = 0;
-    printf("This is LK-payload by xyz. Copyright 2019\n");
-    printf("Original 64-bit version by k4y0z. Copyright 2019\n");
-    printf("Ported to rook by R0rt1z2. Copyright 2025\n");
+    printf("This is LK-payload by xyz and k4y0z. Copyright 2019\n");
+    printf("Ported to Echo Spot (rook) by R0rt1z2. Copyright 2025\n");
 
     int fastboot = 0;
 
@@ -94,16 +96,16 @@ int main() {
         fastboot = 1;
     }
 
-    unsigned char overwritten[] = {
-        0x6C, 0x7C, 0x07, 0x00,  // 0x00077C6C
-        0x60, 0x7C, 0x07, 0x00   // 0x00077C60
-    };
-    memcpy((void*)0x4BD003C0, overwritten, sizeof(overwritten));
+    struct device_t *dev = get_device();
+
+    // Restore the 0x4BD00000-0x41E50000 range, a part of it was overwritten
+    // this is way more than we actually need to restore, but it shouldn't hurt
+    dev->read(dev, g_lk * 0x200 + 0x200, (char*)LK_BASE, 0x50000, USER_PART); // +0x200 to skip lk header
 
     uint32_t **argptr = (void*)0x4BD00020;
-    //printf("(void*)*argptr 0x%08X\n", (void*)*argptr);
-    //printf("(void*)argptr 0x%08X\n", (void*)argptr);
-    *argptr = (void*)0x4be5e208;
+    printf("(void*)*argptr 0x%08X\n", (void*)*argptr);
+    printf("(void*)argptr 0x%08X\n", (void*)argptr);
+    //*argptr = (void*)0x4be5e208;
     //hex_dump((void*)*argptr, 0x180);
 
     uint8_t bootloader_msg[0x20] = { 0 };
@@ -111,8 +113,6 @@ int main() {
     void *lk_dst = (void*)0x4BD00000;
 
     #define LK_SIZE (0x800 * 0x200)
-
-    struct device_t *dev = get_device();
 
     // factory and factory advanced boot
     if(*o_boot_mode == 4 ) {
@@ -161,9 +161,9 @@ int main() {
       // UART flag on MISC
       if(strncmp(bootloader_msg + 0x10, "UART_PLEASE", 11) == 0) {
         // Force uart enable
-        char* disable_uart = (char*)0x4BD5E374;
+        char* disable_uart = (char*)0x4bd5ebb8;
         strcpy(disable_uart, " printk.disable_uart=0");
-	      char* disable_uart2 = (char*)0x4BD5EF4C;
+	      char* disable_uart2 = (char*)0x4bd5f88c;
         strcpy(disable_uart, "printk.disable_uart=0");
       }
     }
@@ -179,11 +179,8 @@ int main() {
     if (fastboot) {
         printf("well since you're asking so nicely...\n");
 	
-	if(*g_boot_mode == 2) *o_boot_mode = 2;
-
-	*g_boot_mode = 99;
-
-        video_printf("=> HACKED FASTBOOT mode: (%d) - xyz, k4y0z, R0rt1z2, AntiEngineer\n", *o_boot_mode);
+	      *g_boot_mode = 99;
+        video_printf("=> HACKED FASTBOOT mode (%d)...\n", *g_boot_mode);
     }
     else if(*g_boot_mode == 2) {
       video_printf("=> RECOVERY mode...");
@@ -194,12 +191,12 @@ int main() {
     printf("o_boot_mode %u\n", *o_boot_mode);
 
     // device is unlocked
-    patch = (void*)0x4BD1D51C;
+    patch = (void*)0x4bd1d2fc;
     *patch++ = 0x2001; // movs r0, #1
     *patch = 0x4770;   // bx lr
 
     // amzn_verify_limited_unlock (to set androidboot.unlocked_kernel=true)
-    patch = (void*)0x4BD1D73C;
+    patch = (void*)0x4bd1d51c;
     *patch++ = 0x2000; // movs r0, #0
     *patch = 0x4770;   // bx lr
 
@@ -212,15 +209,15 @@ int main() {
 
     original_read = (void*)dev->read;
 
-    patch32 = (void*)0x4BD7045C;
+    patch32 = (void*)0x4bd70d04;
     *patch32 = (uint32_t)read_func;
 
     patch32 = (void*)&dev->read;
     *patch32 = (uint32_t)read_func;
 
     // patch max-download-size to accommodate for payload
-    patch32 = (void*)0x4BD3F802;
-    *patch32 = 0x0380F503; // ADD.W	R3, R3, #0x400000
+    //patch32 = (void*)0x4BD3F802;
+    //*patch32 = 0x0380F503; // ADD.W	R3, R3, #0x400000
 
     printf("Clean lk\n");
     cache_clean(lk_dst, LK_SIZE);
