@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import sys
-import struct
 import os
 import sys
 import time
@@ -85,14 +84,6 @@ def parse_gpt(dev):
         data += dev.emmc_read(x)
     num = len(data) // 0x80
     return parse_gpt_compat(dev.emmc_read(0x200 // 0x200) + data)
-#    parts = dict()
-#    for x in range(num):
-#        part = data[x * 0x80:(x + 1) * 0x80]
-#        part_name = part[0x38:].decode("utf-16le").rstrip("\x00")
-#        part_start = struct.unpack("<Q", part[0x20:0x28])[0]
-#        part_end = struct.unpack("<Q", part[0x28:0x30])[0]
-#        parts[part_name] = (part_start, part_end - part_start + 1)
-#    return parts
 
 def main():
     minimal = False
@@ -109,18 +100,10 @@ def main():
     load_payload(dev, "../brom-payload/build/payload.bin")
     dev.kick_watchdog()
 
-    if len(sys.argv) == 2 and sys.argv[1] == "minimal":
-        thread = UserInputThread(msg = "Running in minimal mode, assuming LK and TZ to have already been flashed.\nIf this is correct (i.e. you used \"brick\" option in step 1) press enter, otherwise terminate with Ctrl+C")
-        thread.start()
-        while not thread.done:
-            dev.kick_watchdog()
-            time.sleep(1)
-        minimal = True
-
     if len(sys.argv) == 2 and sys.argv[1] == "fixgpt":
         dev.emmc_switch(0)
         log("Flashing GPT")
-        flash_binary(dev, "../bin/gpt-giza.bin", 0, 34 * 0x200)
+        flash_binary(dev, "../bin/gpt-rook.bin", 0, 34 * 0x200)
 
     # 1) Sanity check GPT
     log("Check GPT")
@@ -188,22 +171,21 @@ def main():
     log("rpmb downgrade ok")
     dev.kick_watchdog()
 
-    if not minimal:
-        # 6) Install preloader
-        log("Flash preloader")
-        switch_boot0(dev)
-        flash_binary(dev, "../bin/preloader.bin", 8)
-        flash_binary(dev, "../bin/preloader.bin", 520)
-    
-        # 7) Downgrade tz
-        log("Flash tz")
-        switch_user(dev)
-        flash_binary(dev, "../bin/tz.img", gpt["tee1"][0], gpt["tee1"][1] * 0x200)
+    # 6) Install preloader
+    log("Flash preloader")
+    switch_boot0(dev)
+    flash_binary(dev, "../bin/preloader.bin", 8)
+    flash_binary(dev, "../bin/preloader.bin", 520)
 
-        # 8) Downgrade lk
-        log("Flash lk")
-        switch_user(dev)
-        flash_binary(dev, "../bin/lk.bin", gpt["lk"][0], gpt["lk"][1] * 0x200)
+    # 7) Downgrade tz
+    log("Flash tz")
+    switch_user(dev)
+    flash_binary(dev, "../bin/tz.img", gpt["tee1"][0], gpt["tee1"][1] * 0x200)
+
+    # 8) Downgrade lk
+    log("Flash lk")
+    switch_user(dev)
+    flash_binary(dev, "../bin/lk.bin", gpt["lk"][0], gpt["lk"][1] * 0x200)
 
     # 9) Flash payload
     log("Inject payload")
