@@ -23,8 +23,8 @@ void _putchar(char character)
     low_uart_put(character);
 }
 
-int (*original_read)(struct device_t *dev, uint64_t block_off, void *dst, size_t sz, int part) = (void*)0x4BD35539;
-int (*app)() = (void*)0x4BD3ED61;
+int (*original_read)(struct device_t *dev, uint64_t block_off, void *dst, size_t sz, int part) = (void*)0x4BD30181;
+int (*app)() = (void*)0x4BD398AC;
 
 uint64_t g_boot, g_boot_x, g_lk, g_misc, g_recovery, g_recovery_x;
 
@@ -82,7 +82,7 @@ int main() {
     int ret = 0;
     printf("This is LK-payload by xyz. Copyright 2019\n");
     printf("Original 64-bit version by k4y0z. Copyright 2019\n");
-    printf("Ported to giza by R0rt1z2. Copyright 2021\n");
+    printf("Ported to rook by R0rt1z2. Copyright 2025\n");
 
     int fastboot = 0;
 
@@ -95,7 +95,8 @@ int main() {
     }
 
     unsigned char overwritten[] = {
-	      0x6C, 0xBC, 0x07, 0x00, 0x60 ,0xBC, 0x07, 0x00
+        0x6C, 0x7C, 0x07, 0x00,  // 0x00077C6C
+        0x60, 0x7C, 0x07, 0x00   // 0x00077C60
     };
     memcpy((void*)0x4BD003C0, overwritten, sizeof(overwritten));
 
@@ -160,9 +161,9 @@ int main() {
       // UART flag on MISC
       if(strncmp(bootloader_msg + 0x10, "UART_PLEASE", 11) == 0) {
         // Force uart enable
-        char* disable_uart = (char*)0x4BD65E44;
+        char* disable_uart = (char*)0x4BD5E374;
         strcpy(disable_uart, " printk.disable_uart=0");
-	      char* disable_uart2 = (char*)0x4BD66AC0;
+	      char* disable_uart2 = (char*)0x4BD5EF4C;
         strcpy(disable_uart, "printk.disable_uart=0");
       }
     }
@@ -182,7 +183,7 @@ int main() {
 
 	*g_boot_mode = 99;
 
-        video_printf("=> HACKED FASTBOOT mode: (%d) - xyz, k4y0z, R0rt1z2\n", *o_boot_mode);
+        video_printf("=> HACKED FASTBOOT mode: (%d) - xyz, k4y0z, R0rt1z2, AntiEngineer\n", *o_boot_mode);
     }
     else if(*g_boot_mode == 2) {
       video_printf("=> RECOVERY mode...");
@@ -193,14 +194,14 @@ int main() {
     printf("o_boot_mode %u\n", *o_boot_mode);
 
     // device is unlocked
-    patch = (void*)0x4BD2054C;
+    patch = (void*)0x4BD1D51C;
     *patch++ = 0x2001; // movs r0, #1
     *patch = 0x4770;   // bx lr
 
     // amzn_verify_limited_unlock (to set androidboot.unlocked_kernel=true)
-    // patch = (void*)0x4BD2080C;
-    // *patch++ = 0x2000; // movs r0, #0
-    // *patch = 0x4770;   // bx lr
+    patch = (void*)0x4BD1D73C;
+    *patch++ = 0x2000; // movs r0, #0
+    *patch = 0x4770;   // bx lr
 
     //printf("(void*)dev->read 0x%08X\n", (void*)dev->read);
     //printf("(void*)&dev->read 0x%08X\n", (void*)&dev->read);
@@ -211,7 +212,7 @@ int main() {
 
     original_read = (void*)dev->read;
 
-    patch32 = (void*)0x4BD76188;
+    patch32 = (void*)0x4BD7045C;
     *patch32 = (uint32_t)read_func;
 
     patch32 = (void*)&dev->read;

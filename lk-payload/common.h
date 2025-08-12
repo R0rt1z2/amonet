@@ -9,12 +9,12 @@ struct device_t {
     size_t (*write)(struct device_t *dev, void *src, uint64_t block_off, size_t size, uint32_t part);
 };
 
-struct device_t* (*get_device)() = (void*)0x4BD35A91;
-void (*cache_clean)(void *addr, size_t sz) = (void*)0x4BD3C368;
-size_t (*video_printf)(const char *format, ...) = (void *)0x4BD434B1;
+struct device_t* (*get_device)() = (void*)0x4BD306D8;
+void (*cache_clean)(void *addr, size_t sz) = (void*)0x4BD36FD8;
+size_t (*video_printf)(const char *format, ...) = (void *)0x4BD3E3E4;
 
-uint32_t* g_boot_mode = (uint32_t*) 0x4BD7C3A0; // LK boot mode
-uint32_t* i_boot_mode = (uint32_t*) 0x4BD88114; // IDME boot_mode
+uint32_t* g_boot_mode = (uint32_t*) 0x4BD78378; // LK boot mode
+uint32_t* i_boot_mode = (uint32_t*) 0x4BD830D0; // IDME boot_mode
 uint32_t* o_boot_mode = (uint32_t*) 0x4BE5E20C; // argptr boot mode
 
 #define PAYLOAD_DST 0x41000000
