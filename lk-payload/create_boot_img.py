@@ -3,7 +3,7 @@ import sys
 import struct
 
 base = 0x4BD00000
-forced_addr = 0x44fffe00
+forced_addr = 0x45000000
 
 # 72a5e:       bd0b            pop     {r0, r1, r3, pc}
 pop_r0_r1_r3_pc = base + 0x6ce2e|1
