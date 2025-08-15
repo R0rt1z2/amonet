@@ -24,6 +24,14 @@ void _putchar(char character)
 int (*original_read)(struct device_t *dev, uint64_t block_off, void *dst, size_t sz, int part) = (void*)(0x4BD2FFF9|1);
 int (*app)() = (void*)(0x4BD39864|1);
 
+void (*fastboot_info)(const char *reason) = (void *)(0x4bd3a00c | 1);
+void (*fastboot_fail)(const char *reason) = (void *)(0x4bd3a054 | 1);
+void (*fastboot_okay)(const char *reason) = (void *)(0x4bd3a204 | 1);
+
+void (*fastboot_register)(const char *prefix, 
+                          void (*handle)(const char *arg, void *data, unsigned sz), 
+                          unsigned char security_enabled) = (void *)(0x4bd39ddc | 1);
+
 uint64_t g_boot, g_boot_x, g_lk, g_misc, g_recovery, g_recovery_x;
 
 int read_func(struct device_t *dev, uint64_t block_off, void *dst, size_t sz, int part) {
@@ -71,6 +79,34 @@ static void parse_gpt(struct device_t *dev) {
             g_recovery_x = start;
         }
     }
+}
+
+void mtk_wdt_reset(void) {
+    volatile uint32_t *wdt_regs = (volatile uint32_t *)0x10007000;
+    wdt_regs[6] = 0x1971;
+    wdt_regs[0] = 0x22000014;
+    wdt_regs[5] = 0x1209;
+}
+
+void cmd_reboot_recovery(const char *arg, void *data, unsigned sz) {
+    if (g_misc) {
+        fastboot_info("Rebooting into recovery");
+
+        uint8_t bootloader_msg[0x20] = { 0 };
+        strcpy((char*)bootloader_msg, "boot-recovery");
+        
+        struct device_t *dev = get_device();
+        dev->write(dev, bootloader_msg, g_misc * 0x200, 0x20, USER_PART);
+        
+        fastboot_okay("");
+        mtk_wdt_reset();
+    } else {
+        fastboot_fail("No misc partition found!");
+    }
+}
+
+void register_fastboot_commands() {
+    fastboot_register("oem reboot-recovery", cmd_reboot_recovery, 1);
 }
 
 int main() {
@@ -145,6 +181,7 @@ int main() {
       printf("Well since you're asking so nicely...\n");
 	    *g_boot_mode = 99;
       video_printf("=> HACKED FASTBOOT mode (%d)...\n", *g_boot_mode);
+      register_fastboot_commands();
     }
 
     if (*g_boot_mode == 2) {
