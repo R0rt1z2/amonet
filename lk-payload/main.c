@@ -35,6 +35,8 @@ void (*fastboot_register)(const char *prefix,
 int (*recovery_keys)() = (void *)(0x4bd1d898 | 1);
 int (*fastboot_keys)() = (void *)(0x4bd1d840 | 1);
 
+void (*cmd_flash)(const char *arg, void *data, unsigned sz) = (void *)(0x4bd3c868 | 1);
+
 uint64_t g_boot, g_boot_x, g_lk, g_misc, g_recovery, g_recovery_x;
 
 int read_func(struct device_t *dev, uint64_t block_off, void *dst, size_t sz, int part) {
@@ -108,8 +110,37 @@ void cmd_reboot_recovery(const char *arg, void *data, unsigned sz) {
     }
 }
 
+void cmd_flash_wrapper(const char *arg, void *data, unsigned sz) {
+    const char *name = arg + 1;
+    
+    if (strncmp(name, "boot_amonet", 11) == 0) {
+        printf("boot_amonet -> boot\n");
+        cmd_flash("boot", data, sz);
+        return;
+    }
+    if (strncmp(name, "recovery_amonet", 15) == 0) {
+        printf("recovery_amonet -> recovery\n");
+        cmd_flash("recovery", data, sz);
+        return;
+    }
+    
+    if (strncmp(name, "boot", 4) == 0) {
+        printf("boot -> boot_x\n");
+        cmd_flash("boot_x", data, sz);
+        return;
+    }
+    if (strncmp(name, "recovery", 8) == 0) {
+        printf("recovery -> recovery_x\n");
+        cmd_flash("recovery_x", data, sz);
+        return;
+    }
+    
+    cmd_flash(name, data, sz);
+}
+
 void register_fastboot_commands() {
     fastboot_register("oem reboot-recovery", cmd_reboot_recovery, 1);
+    fastboot_register("flash", cmd_flash_wrapper, 1);
 }
 
 int main() {
@@ -222,6 +253,11 @@ int main() {
 
     // Don't erase cache when recovery
     patch = (void*)0x4BD39998;
+    *patch++ = 0xBF00; // nop
+    *patch = 0xBF00;   // nop
+
+    // Disable built-in flash command
+    patch = (void*)0x4BD3A352;
     *patch++ = 0xBF00; // nop
     *patch = 0xBF00;   // nop
 
