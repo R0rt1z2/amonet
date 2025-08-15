@@ -32,6 +32,9 @@ void (*fastboot_register)(const char *prefix,
                           void (*handle)(const char *arg, void *data, unsigned sz), 
                           unsigned char security_enabled) = (void *)(0x4bd39ddc | 1);
 
+int (*recovery_keys)() = (void *)(0x4bd1d898 | 1);
+int (*fastboot_keys)() = (void *)(0x4bd1d840 | 1);
+
 uint64_t g_boot, g_boot_x, g_lk, g_misc, g_recovery, g_recovery_x;
 
 int read_func(struct device_t *dev, uint64_t block_off, void *dst, size_t sz, int part) {
@@ -111,6 +114,8 @@ void register_fastboot_commands() {
 
 int main() {
     int ret = 0, fastboot = 0;
+    uint16_t *patch;
+    uint32_t *patch32;
 
     printf("This is LK-payload by xyz and k4y0z. Copyright 2019\n");
     printf("Ported to Echo Spot (rook) by R0rt1z2. Copyright 2025\n");
@@ -177,11 +182,28 @@ int main() {
       }
     }
 
+    // Three keys are pressed at the same time
+    if (fastboot_keys()) {
+      printf("Fastboot keys pressed\n");
+      fastboot = 1;
+    }
+
+    // Volume down and mute (power) keys are pressed
+    if (recovery_keys()) {
+      printf("Recovery keys pressed\n");
+      *g_boot_mode = 2;
+    }
+
     if (fastboot) {
-      printf("Well since you're asking so nicely...\n");
 	    *g_boot_mode = 99;
-      video_printf("=> HACKED FASTBOOT mode (%d)...\n", *g_boot_mode);
       register_fastboot_commands();
+
+      printf("Well since you're asking so nicely...\n");
+      video_printf(" => HACKED FASTBOOT mode...\n");
+
+      // This is so it looks consistent
+      char *fastboot = (char*)0x4BD57178;
+      strcpy(fastboot, " => HACKED FASTBOOT mode...\n");
     }
 
     if (*g_boot_mode == 2) {
@@ -189,7 +211,6 @@ int main() {
     }
 
     // The device is unlocked
-    uint16_t *patch;
     patch = (void*)0x4BD1D2FC;
     *patch++ = 0x2001; // movs r0, #1
     *patch = 0x4770;   // bx lr
@@ -199,9 +220,12 @@ int main() {
     *patch++ = 0x2000; // movs r0, #0
     *patch = 0x4770;   // bx lr
 
-    original_read = (void*)dev->read;
+    // Don't erase cache when recovery
+    patch = (void*)0x4BD39998;
+    *patch++ = 0xBF00; // nop
+    *patch = 0xBF00;   // nop
 
-    uint32_t *patch32;
+    original_read = (void*)dev->read;
     patch32 = (void*)0x4BD70D04;
     *patch32 = (uint32_t)read_func;
 
