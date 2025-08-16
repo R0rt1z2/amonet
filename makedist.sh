@@ -3,7 +3,7 @@
 rm -rf dist
 
 mkdir -p dist/unlock/amonet/bin
-cp bin/{busybox,preloader.hdr0,preloader.hdr1,preloader.bin,lk.bin,tz.img,twrp.img,boot.hdr,boot.payload} dist/unlock/amonet/bin/
+cp bin/{preloader.hdr0,preloader.hdr1,preloader.bin,lk.bin,tz.img,twrp.img,boot.hdr,boot.payload} dist/unlock/amonet/bin/
 echo -ne "boot-recovery\x00" > dist/unlock/amonet/bin/boot-recovery.bin
 dd if=/dev/zero bs=1 count=196624 >> dist/unlock/amonet/bin/boot-recovery.bin
 echo -ne "WIPE_DATA" | dd of=dist/unlock/amonet/bin/boot-recovery.bin bs=1 seek=196608 conv=notrunc

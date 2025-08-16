@@ -45,15 +45,6 @@ check_product() {
   fi
 }
 
-ddx() {
-  ${INSTALLER}/amonet/bin/busybox dd "$@"
-  if [ $? -ne 0 ]; then
-    ui_print "Failed to execute dd with arguments: $*"
-    ui_print "This could be a FATAL error, DON'T REBOOT!"
-    exit 1
-  fi
-}
-
 ##########################################################################################
 # Flashable update-binary preparation
 ##########################################################################################
@@ -80,7 +71,7 @@ if [ "$?" -eq "0" ]; then
   done
 fi
 
-check_product "rook" " - Amazon Echo Spot (1st generation) - "
+check_product "rook" " - Amazon Echo Spot 2017 (1st generation) - "
 
 TMPDIR=/dev/tmp
 INSTALLER=$TMPDIR/install
@@ -89,9 +80,7 @@ INSTALLER=$TMPDIR/install
 rm -rf $TMPDIR 2>/dev/null
 mkdir -p $INSTALLER 2>/dev/null
 
-unzip -o "$ZIP" 'amonet/bin/busybox' 'amonet/bin/twrp.img' 'amonet/bin/boot.hdr' 'amonet/bin/boot.payload' -d $INSTALLER >&2
-
-chmod 755 ${INSTALLER}/amonet/bin/busybox
+unzip -o "$ZIP" 'amonet/bin/twrp.img' 'amonet/bin/boot.hdr' 'amonet/bin/boot.payload' -d $INSTALLER >&2
 
 ##########################################################################################
 # Main
@@ -100,12 +89,12 @@ chmod 755 ${INSTALLER}/amonet/bin/busybox
 ui_print " "
 ui_print "amonet updater"
 ui_print "- updating TWRP"
-ddx if=${INSTALLER}/amonet/bin/twrp.img of=/dev/block/platform/soc/by-name/recovery_x
+dd if=${INSTALLER}/amonet/bin/twrp.img of=/dev/block/platform/soc/by-name/recovery_x
 ui_print "- updating payload"
-ddx if=${INSTALLER}/amonet/bin/boot.hdr of=/dev/block/platform/soc/by-name/boot_amonet bs=512 
-ddx if=${INSTALLER}/amonet/bin/boot.payload of=/dev/block/platform/soc/by-name/boot_amonet bs=512 seek=${PAYLOAD_BLOCK} 
-ddx if=${INSTALLER}/amonet/bin/boot.hdr of=/dev/block/platform/soc/by-name/recovery_amonet bs=512 
-ddx if=${INSTALLER}/amonet/bin/boot.payload of=/dev/block/platform/soc/by-name/recovery_amonet bs=512 seek=${PAYLOAD_BLOCK} 
+dd if=${INSTALLER}/amonet/bin/boot.hdr of=/dev/block/platform/soc/by-name/boot_amonet bs=512 
+dd if=${INSTALLER}/amonet/bin/boot.payload of=/dev/block/platform/soc/by-name/boot_amonet bs=512 seek=${PAYLOAD_BLOCK} 
+dd if=${INSTALLER}/amonet/bin/boot.hdr of=/dev/block/platform/soc/by-name/recovery_amonet bs=512 
+dd if=${INSTALLER}/amonet/bin/boot.payload of=/dev/block/platform/soc/by-name/recovery_amonet bs=512 seek=${PAYLOAD_BLOCK} 
 ui_print "- Update complete"
 ui_print " "
 
