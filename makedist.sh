@@ -3,7 +3,7 @@
 rm -rf dist
 
 mkdir -p dist/unlock/amonet/bin
-cp bin/{preloader.hdr0,preloader.hdr1,preloader.bin,lk.bin,tz.img,twrp.img,boot.hdr,boot.payload} dist/unlock/amonet/bin/
+cp bin/{brick-*.img,preloader.hdr0,preloader.hdr1,preloader.bin,lk.bin,tz.img,twrp.img,boot.hdr,boot.payload} dist/unlock/amonet/bin/
 echo -ne "boot-recovery\x00" > dist/unlock/amonet/bin/boot-recovery.bin
 dd if=/dev/zero bs=1 count=196624 >> dist/unlock/amonet/bin/boot-recovery.bin
 echo -ne "WIPE_DATA" | dd of=dist/unlock/amonet/bin/boot-recovery.bin bs=1 seek=196608 conv=notrunc
@@ -14,7 +14,7 @@ cp modules/{common.py,gpt.py,handshake.py,handshake2.py,load_payload.py,logger.p
 mkdir -p dist/unlock/amonet/brom-payload/build
 cp brom-payload/build/payload.bin dist/unlock/amonet/brom-payload/build/
 
-cp {functions.inc,bootrom-step.sh,fastboot-step.sh,boot-fastboot.sh,boot-recovery.sh} dist/unlock/amonet/
+cp {functions.inc,brick.sh,bootrom-step.sh,fastboot-step.sh,boot-fastboot.sh,boot-recovery.sh} dist/unlock/amonet/
 
 mkdir -p dist/unlock/META-INF/com/google/android
 cp META-INF/com/google/android/{update-binary,updater-script} dist/unlock/META-INF/com/google/android/
