@@ -54,18 +54,11 @@ def main(dev, args):
     log('Check GPT')
     switch_user(dev)
 
+    # 1.1) Parse gpt
     gpt = parse_gpt(dev)
-    log('== GPT start ==')
-    for partition_name, partition_parameters in gpt.items():
-        log('{} {}'.format(partition_name, partition_parameters))
-    log('== GPT end ==')
-    if (
-        'lk' not in gpt
-        or 'tee1' not in gpt
-        or 'boot' not in gpt
-        or 'recovery' not in gpt
-    ):
-        raise RuntimeError('bad gpt')
+    log("gpt_parsed = {}".format(gpt))
+    if "lk" not in gpt or "tee1" not in gpt or "boot" not in gpt or "recovery" not in gpt:
+        raise RuntimeError("bad gpt")
 
     if args.image:
         log('Flash {}'.format(args.partition))
@@ -78,38 +71,6 @@ def main(dev, args):
 
         log('Reboot')
         return dev.reboot()
-
-    """
-    if 'boot_x' not in gpt or 'recovery_x' not in gpt:
-        log('Modify GPT')
-
-        if 'boot_tmp' not in gpt and 'recovery_tmp' not in gpt:
-            part_list_mod1 = modify_step1(part_list)
-        else:
-            part_list_mod1 = part_list
-
-        part_list_mod2 = modify_step2(part_list_mod1)
-        primary, backup = generate_gpt(gpt_header, part_list_mod2)
-
-        log('Validate GPT')
-        gpt_header, part_list = gpt_parse_gpt(bytes(primary))
-
-        log('Flash new primary GPT')
-        flash_data(dev, primary, dev.mmc.gpt_start // dev.mmc.block_size)
-
-        log('Flash new backup GPT')
-        flash_data(
-            dev,
-            backup,
-            (gpt_header['last_lba'] + 1)
-            + (dev.mmc.gpt_start // dev.mmc.block_size),
-        )
-
-        gpt, gpt_header, part_list = parse_gpt(dev)
-        # log("gpt_parsed = {}".format(gpt))
-        if 'boot_x' not in gpt or 'recovery_x' not in gpt:
-            raise RuntimeError('bad gpt')
-    """
 
     # 2) Sanity check boot0
     log('Check boot0')

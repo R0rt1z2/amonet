@@ -322,3 +322,9 @@ class Device:
         self.dev.write(p32_be(0x2001))
         # data
         self.dev.write(data)
+
+    def reboot(self):
+        # magic
+        self.dev.write(p32_be(0xf00dd00d))
+        # cmd
+        self.dev.write(p32_be(0x3000))        

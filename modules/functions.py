@@ -140,12 +140,15 @@ def switch_user(dev):
 
 
 def parse_gpt(dev):
-    data = (
-        dev.emmc_read(0x400 // 0x200)
-        + dev.emmc_read(0x600 // 0x200)
-        + dev.emmc_read(0x800 // 0x200)
-        + dev.emmc_read(0xA00 // 0x200)
-        + dev.emmc_read(0xC00 // 0x200)
-    )
+    data = b''
+    for x in range(2, 13):
+        data += dev.emmc_read(x)
     num = len(data) // 0x80
-    return parse_gpt_compat(dev.emmc_read(0x200 // 0x200) + data)
+    parts = dict()
+    for x in range(num):
+        part = data[x * 0x80:(x + 1) * 0x80]
+        part_name = part[0x38:].decode("utf-16le").rstrip("\x00")
+        part_start = struct.unpack("<Q", part[0x20:0x28])[0]
+        part_end = struct.unpack("<Q", part[0x28:0x30])[0]
+        parts[part_name] = (part_start, part_end - part_start + 1)
+    return parts
