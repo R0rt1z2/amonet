@@ -8,9 +8,6 @@ def handshake(dev, skip_handshake=False):
     if not skip_handshake:
         log('Handshake')
         dev.handshake()
-    log('Disable watchdog')
-    dev.write32(0x10212000, 0x22000000)
-
 
 if __name__ == '__main__':
     if len(sys.argv) > 1:

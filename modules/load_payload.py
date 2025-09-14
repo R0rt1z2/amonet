@@ -1,5 +1,7 @@
 import os
 import struct
+import time
+import threading
 
 from common import CRYPTO_BASE
 from logger import log
@@ -60,6 +62,19 @@ def aes_read16(dev, addr):
         data += struct.pack('<I', word)
     return data
 
+class UserInputThread(threading.Thread):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.done = False
+
+    def run(self):
+        print("")
+        print(" * * * If you have a short attached, remove it now * * * ")
+        print(" * * * Press Enter to continue * * * ")
+        print("")
+        input()
+        self.done = True
 
 def aes_write16(dev, addr, data):
     if len(data) != 16:
@@ -94,6 +109,12 @@ def aes_write16(dev, addr, data):
 
 
 def load_payload(dev, path):
+    thread = UserInputThread()
+    thread.start()
+    while not thread.done:
+        dev.write32(0x10007008, 0x1971) # low-level watchdog kick
+        time.sleep(1)
+
     log('Init crypto engine')
     init(dev)
     hw_acquire(dev)
