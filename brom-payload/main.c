@@ -55,14 +55,14 @@ int main() {
     char buf[0x200] = { 0 };
     int ret = 0;
 
-    int (*send_dword)() = (void*)0x9523;
-    int (*recv_dword)() = (void*)0x94EF;
-    int (*send_data)() = (void*)0x95EB;
-    int (*recv_data)() = (void*)0x9565;
+    int (*send_dword)() = (void*)(0x9986|1);
+    int (*recv_dword)() = (void*)(0x9952|1);
+    int (*send_data)() = (void*)(0x9A4E|1);
+    int (*recv_data)() = (void*)(0x99C8|1);
 
     // Restore the pointer we overwrote
-    uint32_t *ptr_send = (void*)0x1027A0;
-    *ptr_send = 0x3519;
+    uint32_t *ptr_send = (void*)0x1027B0;
+    *ptr_send = 0x331F;
 
     printf("Entered the payload\n");
 

@@ -23,18 +23,27 @@ from logger import log
 
 def main(dev, args):
     check_modemmanager()
+    
     dev.find_device()
-
-    while dev.preloader:
-        log("Found device in preloader mode, trying to crash...")
+    
+    if dev.preloader:
+        log("Crashing preloader to bootrom...")
         dev.handshake()
         dev.crash_pl()
         dev.dev.close()
-        dev = Device()
-        dev.find_device()
-
-    # 0.1) Handshake
+        dev.dev = None
+        
+        time.sleep(0.5)
+        dev.find_device('0E8D', '0003')
+        
+        if dev.preloader:
+            raise RuntimeError("Failed to crash to bootrom")
+    
     handshake(dev, args.skip_handshake)
+
+    # 0.2) Load brom payload
+    load_payload(dev, "../brom-payload/build/payload.bin")
+    dev.kick_watchdog()
 
     if args.gptfix:
         dev.emmc_switch(0)

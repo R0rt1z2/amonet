@@ -13,10 +13,10 @@ TIMEOUT = 5
 VID = "0E8D"
 PID = "0003"
 
-CRYPTO_BASE = 0x10216000  # for 6735
+CRYPTO_BASE = 0x10210000  # for 6750
 
 
-def serial_ports(vid='0E8D', pid='3000'):
+def serial_ports(vid=None, pid=None):
     """Lists available serial ports
 
     :raises EnvironmentError:
@@ -24,7 +24,6 @@ def serial_ports(vid='0E8D', pid='3000'):
     :returns:
         A set containing the serial ports available on the system
     """
-
     result = set()
     ports = list(serial.tools.list_ports.comports())
     for port in ports:
@@ -34,16 +33,24 @@ def serial_ports(vid='0E8D', pid='3000'):
         else:
             portHwid = port[2]
             portDevice = port[0]
-        if vid and pid in portHwid:
-            try:
-                s = serial.Serial(portDevice, timeout=TIMEOUT)
-                s.close()
-                result.add(portDevice)
-            except (OSError, serial.SerialException):
-                pass
-
+        
+        if vid and pid:
+            if vid in portHwid and pid in portHwid:
+                try:
+                    s = serial.Serial(portDevice, timeout=TIMEOUT)
+                    s.close()
+                    result.add(portDevice)
+                except (OSError, serial.SerialException):
+                    pass
+        else:
+            if ('1004' in portHwid and '6000' in portHwid) or ('0E8D' in portHwid and '0003' in portHwid):
+                try:
+                    s = serial.Serial(portDevice, timeout=TIMEOUT)
+                    s.close()
+                    result.add(portDevice)
+                except (OSError, serial.SerialException):
+                    pass
     return result
-
 
 def to_bytes(data, size = 1, endian = ">"):
     if size == 4:
@@ -65,39 +72,44 @@ class Device:
         if port:
             self.dev = serial.Serial(port, BAUD, timeout=TIMEOUT)
 
-    def find_device(self):
+    def find_device(self, vid=None, pid=None):
         if self.dev:
-            raise RuntimeError("Device already found")
-
+            self.dev.close()
+            self.dev = None
+            
         log("Waiting for device")
-
-        old = serial_ports()
+        
+        old = serial_ports(vid, pid)
         while True:
-            new = serial_ports()
-
-            # port added
+            new = serial_ports(vid, pid)
+            
             if new > old:
                 port = (new - old).pop()
                 break
-            # port removed
             elif old > new:
                 old = new
-
+                
             time.sleep(0.25)
-
-        log("Found port = {}".format(port.device))
-
-        if not PID in port.hwid:
-            self.preloader = True
-
-        self.dev = serial.Serial(port.device, BAUD, timeout=TIMEOUT)
+        
+        log("Found port = {}".format(port))
+        
+        ports = list(serial.tools.list_ports.comports())
+        port_info = next((p for p in ports if p.device == port), None)
+        
+        self.preloader = False
+        if port_info:
+            if '1004' in port_info.hwid and '6000' in port_info.hwid:
+                self.preloader = True
+                log("Device in preloader mode")
+            elif '0E8D' in port_info.hwid and '0003' in port_info.hwid:
+                self.preloader = False
+                log("Device in bootrom mode")
+        
+        self.dev = serial.Serial(port, BAUD, timeout=TIMEOUT)
 
     def check(self, test, gold):
         if test != gold:
-            print(test)
-            print(gold)
-            # print("ERROR: Serial protocol mismatch")
-            raise RuntimeError('ERROR: Serial protocol mismatch')
+            raise RuntimeError('ERROR: Serial protocol mismatch (got {}, expected {})'.format(test, gold))
 
     def write(self, data, size=1):
         if type(data) != bytes:
@@ -140,7 +152,7 @@ class Device:
             self.send_da(0, len(payload), 0, payload)
             self.jump_da(0)
         except RuntimeError as e:
-            log(e)
+            pass # we expect failure here
 
     def check_int(self, test, gold):
         test = struct.unpack('>I', test)[0]
@@ -151,16 +163,21 @@ class Device:
         return self.dev.read()
 
     def handshake(self):
-        # look for start byte
-        while True:
+        for i in range(10):
+            if i > 0:
+                time.sleep(0.1)
+            self.dev.flushInput()
             c = self._writeb(b'\xa0')
             if c == b'\x5f':
                 break
-            self.dev.flushInput()
-
-        # complete sequence
+        else:
+            raise RuntimeError("Handshake failed")
+        
+        time.sleep(0.05)
         self.check(self._writeb(b'\x0a'), b'\xf5')
+        time.sleep(0.05)
         self.check(self._writeb(b'\x50'), b'\xaf')
+        time.sleep(0.05)
         self.check(self._writeb(b'\x05'), b'\xfa')
 
     def handshake2(self, cmd='FACTFACT'):
