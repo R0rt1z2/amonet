@@ -25,6 +25,14 @@ def main(dev, args):
     check_modemmanager()
     dev.find_device()
 
+    while dev.preloader:
+        log("Found device in preloader mode, trying to crash...")
+        dev.handshake()
+        dev.crash_pl()
+        dev.dev.close()
+        dev = Device()
+        dev.find_device()
+
     # 0.1) Handshake
     handshake(dev, args.skip_handshake)
 
