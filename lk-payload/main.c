@@ -86,6 +86,16 @@ int main() {
         fastboot = 1;
     }
 
+    if (is_volume_down_pressed()) {
+        printf("volume down pressed, entering fastboot mode\n");
+        fastboot = 1;
+    }
+
+    if (is_volume_up_pressed()) {
+        printf("volume up pressed, entering recovery mode\n");
+        *g_boot_mode = 2;
+    }
+
     original_read = (void*)dev->read;
     dev->read = (void*)read_func;
 
@@ -93,6 +103,11 @@ int main() {
     patch32 = (uint32_t*)0x46058138;
     patch32[0] = 0x2001; // movs r0, #1
     patch32[1] = 0x4770; // bx lr
+
+    patch32 = (uint32_t*)0x46057e3c;
+    patch32[0] = 0x2000; // movs r0, #0
+    patch32[1] = 0x6020; // str r0, [r4, #0]  
+    patch32[2] = 0x4770; // bx lr
 
     // mark secure download as disabled
     patch32 = (uint32_t*)0x460583FC;
@@ -110,6 +125,11 @@ int main() {
     patch[1] = 0x600b; // str r3, [r1,#0] 
     patch[2] = 0x2000; // movs r0, #0
     patch[3] = 0x4770; // bx lr
+
+    // allow to boot any partition
+    patch32 = (uint32_t*)0x46026b48;
+    patch32[0] = 0x2000; // movs r0, #0
+    patch32[1] = 0x4770; // bx lr
 
     // lol
     strcpy((char*)0x4606f5b0, " - what is that?");
@@ -130,7 +150,7 @@ int main() {
     // parsing. This fails because amonet crafts a malicious boot image with a heavily modified boot
     // header. Since DTB is required for kernel boot, we force the bootloader to load DTB after we
     // have hooked the read function to properly handle our crafted boot image structure.
-    bldr_load_dtb("boot");
+    bldr_load_dtb((*g_boot_mode != 2) ? "boot" : "recovery");
 
     arch_clean_invalidate_cache_range(LK_BASE, LK_SIZE);
 

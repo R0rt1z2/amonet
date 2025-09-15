@@ -55,6 +55,8 @@ void (*dprintf)(const char *fmt, ...) = (void (*)(const char* fmt, ...))(0x46033
 void (*arch_clean_invalidate_cache_range)(uint32_t start, uint32_t size) = (void (*)(uint32_t, uint32_t))0x4601c5cc;
 part_dev_t *(*mt_part_get_device)() = (part_dev_t * (*)())(0x46053740 | 1);
 int (*bldr_load_dtb)(char *boot_load_partition) = (int (*)(char *))(0x460276e8 | 1);
+int (*is_volume_down_pressed)(void) = (int (*)(void))(0x46000160 | 1);
+int (*is_volume_up_pressed)(void) = (int (*)(void))(0x46000150 | 1);
 
 part_dev_t *get_device(void) {
     return mt_part_get_device();
