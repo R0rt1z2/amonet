@@ -69,7 +69,7 @@ static void parse_gpt(part_dev_t *dev) {
 }
 
 int main() {
-    int ret = 0, fastboot = 1;
+    int ret = 0, fastboot = 0;
     uint16_t *patch;
     uint32_t *patch32;
 
@@ -104,13 +104,6 @@ int main() {
     patch32[0] = 0x2000; // movs r0,
     patch32[1] = 0x4770; // bx lr
 
-    // force green verified boot state
-    patch = (uint16_t*)0x460296B4;
-    patch[0] = 0x46c0; // nop
-    patch[1] = 0x46c0; // nop
-    *(uint32_t*)(*(uint32_t*)0x46026f58 + 0x46026f56) = 0; // just in case
-    *(uint32_t*)0x46026f50 = 0x47702000; // movs r0, #0; bx lr
-
     // allow to flash any partition
     patch = (uint16_t*)0x4605815c;
     patch[0] = 0x2301; // movs r3, #1
@@ -131,6 +124,13 @@ int main() {
       printf("Well since you're asking so nicely...\n");
       video_printf(" => HACKED FASTBOOT mode...\n");
     }
+
+    // This is required because this LK was built with CFG_DTB_EARLY_LOADER_SUPPORT, which forces the
+    // bootloader to attempt loading the DTB from the boot/recovery partition immediately after GPT
+    // parsing. This fails because amonet crafts a malicious boot image with a heavily modified boot
+    // header. Since DTB is required for kernel boot, we force the bootloader to load DTB after we
+    // have hooked the read function to properly handle our crafted boot image structure.
+    bldr_load_dtb("boot");
 
     arch_clean_invalidate_cache_range(LK_BASE, LK_SIZE);
 
