@@ -69,7 +69,7 @@ static void parse_gpt(part_dev_t *dev) {
 }
 
 int main() {
-    int ret = 0, fastboot = 0;
+    int ret = 0, fastboot = 1;
     uint16_t *patch;
     uint32_t *patch32;
 
@@ -89,8 +89,41 @@ int main() {
     original_read = (void*)dev->read;
     dev->read = (void*)read_func;
 
+    // mark the device as unlocked
+    patch32 = (uint32_t*)0x46058138;
+    patch32[0] = 0x2001; // movs r0, #1
+    patch32[1] = 0x4770; // bx lr
+
+    // mark secure download as disabled
+    patch32 = (uint32_t*)0x460583FC;
+    patch32[0] = 0x2000; // movs r0, #0
+    patch32[1] = 0x4770; // bx lr
+
+    // mark secure boot as disabled
+    patch32 = (uint32_t*)0x460570BC;
+    patch32[0] = 0x2000; // movs r0,
+    patch32[1] = 0x4770; // bx lr
+
+    // force green verified boot state
+    patch = (uint16_t*)0x460296B4;
+    patch[0] = 0x46c0; // nop
+    patch[1] = 0x46c0; // nop
+    *(uint32_t*)(*(uint32_t*)0x46026f58 + 0x46026f56) = 0; // just in case
+    *(uint32_t*)0x46026f50 = 0x47702000; // movs r0, #0; bx lr
+
+    // allow to flash any partition
+    patch = (uint16_t*)0x4605815c;
+    patch[0] = 0x2301; // movs r3, #1
+    patch[1] = 0x600b; // str r3, [r1,#0] 
+    patch[2] = 0x2000; // movs r0, #0
+    patch[3] = 0x4770; // bx lr
+
+    // lol
+    strcpy((char*)0x4606f5b0, " - what is that?");
+    // strcpy((char*)0x4606F5BC, " - what is that?");
+
     if (fastboot) {
-	    *g_boot_mode = 99;
+	  *g_boot_mode = 99;
       patch = (uint16_t*)0x4602A3B8;
       patch[0] = 0x46c0; // nop
       patch[1] = 0x46c0; // nop

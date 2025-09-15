@@ -130,7 +130,7 @@ int main() {
         }
         case 0x3000: {
             printf("Reboot\n");
-            volatile uint32_t *reg = (volatile uint32_t *)0x10212000;
+            volatile uint32_t *reg = (volatile uint32_t *)0x10007000;
             reg[8/4] = 0x1971;
             reg[0/4] = 0x22000014;
             reg[0x14/4] = 0x1209;
@@ -141,7 +141,7 @@ int main() {
         }
         case 0x3001: {
             printf("Kick watchdog\n");
-            volatile uint32_t *reg = (volatile uint32_t *)0x10212000;
+            volatile uint32_t *reg = (volatile uint32_t *)0x10007000;
             reg[8/4] = 0x1971;
             break;
         }
