@@ -169,8 +169,13 @@ int main() {
     }
 
     // factory and factory advanced boot
-    else if(*g_boot_mode == 4 || *g_boot_mode == 6){
-        fastboot = 1;
+    if(*o_boot_mode == 4 ) {
+      fastboot = 1;
+    }
+
+    // use advanced factory mode to boot recovery
+    else if(*o_boot_mode == 6) {
+      *g_boot_mode = 2;
     }
 
     // Use seperate recovery partition

@@ -12,7 +12,8 @@ struct device_t {
 struct device_t* (*get_device)() = (void*)0x4BD2B2F1;
 void (*cache_clean)(void *addr, size_t sz) = (void*)0x4BD31444;
 
-uint32_t* g_boot_mode = (uint32_t*) 0x4BD5C2AC;
+uint32_t* g_boot_mode = (uint32_t*) 0x4BD5C2AC; // LK boot mode
+uint32_t* o_boot_mode = (uint32_t*) 0x4BE5E20C; // argptr boot mode
 
 #define PAYLOAD_DST 0x41000000
 #define PAYLOAD_SRC 0x200000
