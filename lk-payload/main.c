@@ -28,32 +28,34 @@ uint8_t boot_recovery = 0;
 
 int read_func(struct device_t *dev, uint64_t block_off, void *dst, size_t sz, int part) {
     printf("read_func hook\n");
-    //hex_dump((void *)0x4BD00000, 0x100);
-    //printf("block_off 0x%08X 0x%08X\n", block_off, *(&(block_off)+4));
+    printf("block_off 0x%08X 0x%08X\n", block_off, *(&(block_off)+4));
+    printf("dev 0x%08X dst 0x%08X sz 0x%08X part 0x%08X\n", dev, dst, sz, part);
+
     int ret = 0;
-    if(block_off == g_boot_a * 0x200) {
-      if(boot_recovery) {
+
+    if (block_off == g_boot_a * 0x200) {
+      if (boot_recovery) {
         block_off = g_recovery * 0x200;
       }
       else {
         block_off = g_boot_a_x * 0x200;
       }
-    } else if(block_off == (g_boot_a * 0x200) + 0x800) {
-      if(boot_recovery) {
+    } else if (block_off == (g_boot_a * 0x200) + 0x800) {
+      if (boot_recovery) {
          block_off = (g_recovery * 0x200) + 0x800;
       }
       else {
         block_off = (g_boot_a_x * 0x200) + 0x800;
       }
-    } else if(block_off == g_boot_b * 0x200) {
-      if(boot_recovery) {
+    } else if (block_off == g_boot_b * 0x200) {
+      if (boot_recovery) {
         block_off = g_recovery * 0x200;
       }
       else {
         block_off = g_boot_b_x * 0x200;
       }
-    } else if(block_off == (g_boot_b * 0x200) + 0x800) {
-      if(boot_recovery) {
+    } else if (block_off == (g_boot_b * 0x200) + 0x800) {
+      if (boot_recovery) {
         block_off = (g_recovery * 0x200) + 0x800;
       }
       else {
@@ -101,11 +103,12 @@ static void parse_gpt() {
 }
 
 int main() {
-    int ret = 0;
-    printf("This is LK-payload by xyz. Copyright 2019\n");
-    printf("64-Bit version for biscuit by k4y0z. Copyright 2020\n");
+    int ret = 0, fastboot = 0;
+    uint16_t *patch;
+    uint32_t *patch32;
 
-    int fastboot = 0;
+    printf("This is LK-payload by xyz. Copyright 2019\n");
+    printf("64-Bit version for biscuit by k4y0z and R0rt1z2. Copyright 2020-2025\n");
 
     parse_gpt();
 
@@ -123,11 +126,6 @@ int main() {
     };
 
     memcpy((void*)0x4BD003C0, overwritten, sizeof(overwritten));
-    //hex_dump((void*)0x4BD003C0, 0x100);
-
-    void *lk_dst = (void*)0x4BD00000;
-
-    #define LK_SIZE (0x800 * 0x200)
 
     struct device_t *dev = get_device();
 
@@ -143,11 +141,10 @@ int main() {
 
     // Use seperate recovery partition
     else if(*g_boot_mode == 2){
-        //fastboot = 1;
         if(g_recovery) {
           boot_recovery = 1;
-          //If we don't set boot_mode to 0, USB is disabled.
-          *g_boot_mode = 0;
+          // kernel checks this to decide whether to enable USB or not
+          *g_boot_mode = 0; 
         }
     }
 
@@ -156,13 +153,13 @@ int main() {
       dev->read(dev, g_misc * 0x200, bootloader_msg, 0x10, USER_PART);
       printf("Read bootloader_msg: %s\n", bootloader_msg);
 
-      if(strncmp(bootloader_msg, "boot-amonet", 11) == 0) {
+      if (strncmp(bootloader_msg, "boot-amonet", 11) == 0) {
         fastboot = 1;
         memset(bootloader_msg, 0, 0x10);
         dev->write(dev, bootloader_msg, g_misc * 0x200, 0x10, USER_PART);
       }
 
-      else if(strncmp(bootloader_msg, "FASTBOOT_PLEASE", 15) == 0) {
+      else if (strncmp(bootloader_msg, "FASTBOOT_PLEASE", 15) == 0) {
         if (*g_boot_mode == 2) {
           memset(bootloader_msg, 0, 0x10);
           dev->write(dev, bootloader_msg, g_misc * 0x200, 0x10, USER_PART);
@@ -172,7 +169,7 @@ int main() {
         }
       }
 
-      else if(strncmp(bootloader_msg, "boot-recovery", 13) == 0) {
+      else if (strncmp(bootloader_msg, "boot-recovery", 13) == 0) {
         *g_boot_mode = 2;
         memset(bootloader_msg, 0, 0x10);
         dev->write(dev, bootloader_msg, g_misc * 0x200, 0x10, USER_PART);
@@ -186,56 +183,42 @@ int main() {
       }
     }
 
-    uint16_t *patch;
-
-    // force fastboot mode
+    // Force fastboot mode
     if (fastboot) {
         printf("well since you're asking so nicely...\n");
-
-        patch = (void*)0x4BD34330;
-        *patch = 0xE795;
+        *g_boot_mode = 99;
     }
 
-    printf("g_boot_mode %u\n", *g_boot_mode);
-    // device is unlocked
+    // The device is unlocked
     patch = (void*)0x4BD1D2FC;
     *patch++ = 0x2001; // movs r0, #1
     *patch = 0x4770;   // bx lr
 
-    // This enables adb-root-shell
-    // amzn_verify_limited_unlock (to set androidboot.unlocked_kernel=true)
+    // Amazon specific unlock patch
     patch = (void*)0x4BD1D51C;
     *patch++ = 0x2000; // movs r0, #0
     *patch = 0x4770;   // bx lr
 
-    // Force uart enable
-
-
-    uint32_t *patch32;
-
-    // hook bootimg read function
-
+    // Hook bootimg read function
     original_read = (void*)dev->read;
-
     patch32 = (void*)0x4BD57670;
     *patch32 = (uint32_t)read_func;
 
     patch32 = (void*)&dev->read;
     *patch32 = (uint32_t)read_func;
 
+    // Force 64-bit kernel
     patch32 = (void*)0x4BD641F4;
-    *patch32 = 1; // // force 64-bit linux kernel
+    *patch32 = 1;
 
-    // patch max-download-size to accommodate for payload
+    // Accomodate the max download size
     patch32 = (void*)0x4BD34CE0;
     *patch32 = 0x0380F503; // ADD.W	R3, R3, #0x400000
 
     printf("Clean lk\n");
-    cache_clean(lk_dst, LK_SIZE);
+    cache_clean((void *)LK_BASE, LK_SIZE);
 
     app();
 
-    while (1) {
-
-    }
+    while (1) {}
 }

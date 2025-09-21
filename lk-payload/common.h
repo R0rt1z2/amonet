@@ -11,6 +11,7 @@ struct device_t {
 
 struct device_t* (*get_device)() = (void*)0x4BD2B2F1;
 void (*cache_clean)(void *addr, size_t sz) = (void*)0x4BD31444;
+int (*mtk_detect_key)(unsigned short key) = (void*)0x4BD21C38;
 
 uint32_t* g_boot_mode = (uint32_t*) 0x4BD5C2AC; // LK boot mode
 uint32_t* o_boot_mode = (uint32_t*) 0x4BE5E20C; // argptr boot mode
@@ -18,6 +19,11 @@ uint32_t* o_boot_mode = (uint32_t*) 0x4BE5E20C; // argptr boot mode
 #define PAYLOAD_DST 0x41000000
 #define PAYLOAD_SRC 0x200000
 #define PAYLOAD_SIZE 0x200000
+
+#define KEY_UBER 0
+
+#define LK_SIZE (0x800 * 0x200)
+#define LK_BASE 0x4BD00000
 
 #define BOOT0_PART 1
 #define USER_PART 8
