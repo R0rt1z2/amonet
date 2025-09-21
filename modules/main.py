@@ -46,8 +46,9 @@ def dump_binary(dev, path, start_block, max_size=0):
 def force_fastboot(dev, gpt):
     switch_user(dev)
     block = list(dev.emmc_read(gpt["misc"][0]))
-    block[0:12] = "boot-amonet\x00".encode("utf-8")
+    block[0:16] = "FASTBOOT_PLEASE\x00".encode("utf-8")
     dev.emmc_write(gpt["misc"][0], bytes(block))
+    block = dev.emmc_read(gpt["misc"][0])
 
 #NOTE: This doesn't actually wipe userdata, it just erases the first 10 blocks.
 #      A new filesystem should be created at next boot.
@@ -156,7 +157,6 @@ def main():
         dev.reboot()
         raise RuntimeError("downgrade failure, giving up")
     log("rpmb downgrade ok")
-
     # 7) Downgrade tz
     log("Flash tz")
     switch_user(dev)
@@ -172,18 +172,14 @@ def main():
     log("Inject payload")
     switch_user(dev)
     flash_binary(dev, "../bin/boot.hdr", gpt["boot_a"][0], gpt["boot_a"][1] * 0x200)
-    #flash_binary(dev, "../bin/boot.hdr.fb", gpt["boot_a"][0], gpt["boot_a"][1] * 0x200)
     flash_binary(dev, "../bin/boot.payload", gpt["boot_a"][0] + 0x367F7, (gpt["boot_a"][1] * 0x200) - (0x367F7 * 0x200))
 
     switch_user(dev)
     flash_binary(dev, "../bin/boot.hdr", gpt["boot_b"][0], gpt["boot_b"][1] * 0x200)
-    #flash_binary(dev, "../bin/boot.hdr.fb", gpt["boot_b"][0], gpt["boot_b"][1] * 0x200)
     flash_binary(dev, "../bin/boot.payload", gpt["boot_b"][0] + 0x367F7, (gpt["boot_b"][1] * 0x200) - (0x367F7 * 0x200))
 
-    #flash_binary(dev, "../echo-dot-new-bins/misc.img", gpt["misc"][0], gpt["misc"][1] * 0x200)
-    log("Enable hacked fastboot for next boot")
+    log("Force fastboot")
     force_fastboot(dev, gpt)
-
     # 6) Downgrade preloader
     log("Flash preloader")
     switch_boot0(dev)

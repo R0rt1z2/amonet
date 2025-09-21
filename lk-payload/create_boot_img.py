@@ -115,10 +115,6 @@ def main():
         print("Writing " + args[3] + "...")
         with open(args[3], "wb") as fout:
             fout.write(hdr[:0x60])
-        print("Writing " + args[3] + ".fb...")
-        with open(args[3] + ".fb", "wb") as fout:
-            fout.write(hdr[:0x60])
-            fout.write("FASTBOOT_PLEASE\0".encode('utf-8'))
         print("Writing " + args[4] + "...")
         with open(args[4], "wb") as fout:
             fout.write(hdr[payload_block * 0x200:])

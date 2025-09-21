@@ -1,10 +1,7 @@
 #include <inttypes.h>
 
 #include "libc.h"
-
 #include "common.h"
-
-//#define RELOAD_LK
 
 void low_uart_put(int ch) {
     volatile uint32_t *uart_reg0 = (volatile uint32_t*)0x11002014;
@@ -128,45 +125,11 @@ int main() {
     memcpy((void*)0x4BD003C0, overwritten, sizeof(overwritten));
     //hex_dump((void*)0x4BD003C0, 0x100);
 
-    uint8_t bootloader_msg[0x10] = { 0 };
     void *lk_dst = (void*)0x4BD00000;
 
     #define LK_SIZE (0x800 * 0x200)
 
     struct device_t *dev = get_device();
-
-    if(g_misc) {
-      // Read amonet-flag from MISC partition
-      dev->read(dev, g_misc * 0x200, bootloader_msg, 0x10, USER_PART);
-      //dev->read(dev, g_misc * 0x200 + 0x4000, bootloader_msg, 0x10, USER_PART);
-      //printf("bootloader_msg: %s\n", bootloader_msg);
-    }
-
-    uint8_t *tmp = (void*)0x45000020;
-
-/*
-    uint32_t* boot_reason = (uint32_t*)((*(uint32_t*)0x4BD664E0) + 256);
-    char* bootreason = (char*)(16 * *boot_reason + 0x4BD55FFC);
-    uint32_t* usb_config = (uint32_t*)((*(uint32_t*)0x4BD664E0) + 264);
-
-    printf("boot_reason %u\n", *boot_reason);
-    printf("bootreason %s\n", bootreason);
-    for(int i = 0; i < 12; ++i) {
-      printf("bootreason (%u) %s\n", i, (char*)(16 * i + 0x4BD55FFC));
-    }
-*/
-
-    if (strncmp(tmp, "FASTBOOT_PLEASE", 15) == 0) {
-        fastboot = 1;
-    }
-
-    // flag on MISC
-    else if(strncmp(bootloader_msg, "boot-amonet", 11) == 0) {
-      fastboot = 1;
-      // reset flag
-      memset(bootloader_msg, 0, 11);
-      dev->write(dev, bootloader_msg, g_misc * 0x200, 11, USER_PART);
-    }
 
     // factory and factory advanced boot
     if(*o_boot_mode == 4 ) {
@@ -188,10 +151,40 @@ int main() {
         }
     }
 
-#ifdef RELOAD_LK
-      printf("Disable interrupts\n");
-      asm volatile ("cpsid if");
-#endif
+    if(g_misc) {
+      uint8_t bootloader_msg[0x20] = { 0 };
+      dev->read(dev, g_misc * 0x200, bootloader_msg, 0x10, USER_PART);
+      printf("Read bootloader_msg: %s\n", bootloader_msg);
+
+      if(strncmp(bootloader_msg, "boot-amonet", 11) == 0) {
+        fastboot = 1;
+        memset(bootloader_msg, 0, 0x10);
+        dev->write(dev, bootloader_msg, g_misc * 0x200, 0x10, USER_PART);
+      }
+
+      else if(strncmp(bootloader_msg, "FASTBOOT_PLEASE", 15) == 0) {
+        if (*g_boot_mode == 2) {
+          memset(bootloader_msg, 0, 0x10);
+          dev->write(dev, bootloader_msg, g_misc * 0x200, 0x10, USER_PART);
+        }
+        else {
+          fastboot = 1;
+        }
+      }
+
+      else if(strncmp(bootloader_msg, "boot-recovery", 13) == 0) {
+        *g_boot_mode = 2;
+        memset(bootloader_msg, 0, 0x10);
+        dev->write(dev, bootloader_msg, g_misc * 0x200, 0x10, USER_PART);
+      }
+
+      if (strncmp(bootloader_msg + 0x10, "UART_PLEASE", 11) == 0) {
+        char* disable_uart = (char*)0x4BD4B0F8;
+        strcpy(disable_uart, "printk.disable_uart=0");
+        disable_uart = (char*)0x4BD4A56C;
+        strcpy(disable_uart, " printk.disable_uart=0");
+      }
+    }
 
     uint16_t *patch;
 
@@ -215,20 +208,8 @@ int main() {
     *patch++ = 0x2000; // movs r0, #0
     *patch = 0x4770;   // bx lr
 
-    /*
-    // is_prod_device
-    patch = (void*)0x4BD1DB0A;
-    *patch = 0x2000; // movs r0, #0
-    */
-
-    //printf("(void*)dev->read 0x%08X\n", (void*)dev->read);
-    //printf("(void*)&dev->read 0x%08X\n", (void*)&dev->read);
-
     // Force uart enable
-    char* disable_uart = (char*)0x4BD4B0F8;
-    strcpy(disable_uart, "printk.disable_uart=0");
-    disable_uart = (char*)0x4BD4A56C;
-    strcpy(disable_uart, " printk.disable_uart=0");
+
 
     uint32_t *patch32;
 
@@ -252,23 +233,7 @@ int main() {
     printf("Clean lk\n");
     cache_clean(lk_dst, LK_SIZE);
 
-#ifdef RELOAD_LK
-    printf("About to jump to LK\n");
-
-    uint32_t **argptr = (void*)0x4BD00020;
-    uint32_t *arg = *argptr;
-    arg[0x53] = 4; // force 64-bit linux kernel
-
-    asm volatile (
-        "mov r4, %0\n" 
-        "mov r3, %1\n"
-        "blx r3\n"
-        : : "r" (arg), "r" (lk_dst) : "r3", "r4");
-
-    printf("Failure\n");
-#else
     app();
-#endif
 
     while (1) {
 
