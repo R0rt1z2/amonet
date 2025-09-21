@@ -1,5 +1,10 @@
 #pragma once
 
+#include <stddef.h>
+#include <stdint.h>
+
+#include "thread.h"
+
 struct device_t {
     uint32_t unk1;
     uint32_t unk2;
@@ -12,6 +17,14 @@ struct device_t {
 struct device_t* (*get_device)() = (void*)0x4BD2B2F1;
 void (*cache_clean)(void *addr, size_t sz) = (void*)0x4BD31444;
 int (*mtk_detect_key)(unsigned short key) = (void*)0x4BD21C38;
+void (*mdelay)(int) = (void*)(0x4BD21B58 | 1);
+
+int (*thread_resume)(thread_t*) = (void*)(0x4BD31FCC | 1);
+thread_t* (*thread_create)(const char*, void*, void*, int, size_t) = (void*)(0x4BD31E2C | 1);
+void (*thread_sleep)(int) = (void*)(0x4BD32170 | 1);
+
+void (*led_update)(int, uint8_t*) = (void*)(0x4BD329A0 | 1);
+int (*led_write)(int, int) = (void*)(0x4BD3295C | 1);
 
 uint32_t* g_boot_mode = (uint32_t*) 0x4BD5C2AC; // LK boot mode
 uint32_t* o_boot_mode = (uint32_t*) 0x4BE5E20C; // argptr boot mode

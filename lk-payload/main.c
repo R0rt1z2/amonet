@@ -1,5 +1,3 @@
-#include <inttypes.h>
-
 #include "libc.h"
 #include "common.h"
 
@@ -25,6 +23,45 @@ int (*app)() = (void*)0x4BD341D5;
 
 uint64_t g_boot_a, g_boot_a_x, g_boot_b, g_boot_b_x, g_lk_a, g_lk_b, g_misc, g_recovery;
 uint8_t boot_recovery = 0;
+
+void set_led_ring(uint8_t colors[12][3]) {
+    static uint8_t frame[36];
+    for (int i = 0; i < 12; i++) {
+        frame[i*3] = colors[i][0];
+        frame[i*3+1] = colors[i][1]; 
+        frame[i*3+2] = colors[i][2];
+    }
+    led_update(1, frame);
+    led_write(0x25, 0);
+}
+
+void* led_animation_thread(void* arg) {
+    while (1) {
+        for (int step = 0; step < 36; step++) {
+            uint8_t frame[12][3];
+            for (int i = 0; i < 12; i++) {
+                int pos = step + i;
+                while (pos >= 12) pos -= 12;
+                if (pos < 2) { frame[i][0] = 0xFF; frame[i][1] = 0x00; frame[i][2] = 0x00; }
+                else if (pos < 4) { frame[i][0] = 0xFF; frame[i][1] = 0x7F; frame[i][2] = 0x00; }
+                else if (pos < 6) { frame[i][0] = 0x00; frame[i][1] = 0xFF; frame[i][2] = 0x00; }
+                else if (pos < 8) { frame[i][0] = 0x00; frame[i][1] = 0xFF; frame[i][2] = 0xFF; }
+                else if (pos < 10) { frame[i][0] = 0x00; frame[i][1] = 0x00; frame[i][2] = 0xFF; }
+                else { frame[i][0] = 0xFF; frame[i][1] = 0x00; frame[i][2] = 0xFF; }
+            }
+            set_led_ring(frame);
+            thread_sleep(100);
+        }
+    }
+    return NULL;
+}
+
+void create_led_thread() {
+  thread_t* led_thread = thread_create("rainbow", led_animation_thread, NULL, 10, 4096);
+  if (led_thread) {
+    thread_resume(led_thread);
+  }
+}
 
 int read_func(struct device_t *dev, uint64_t block_off, void *dst, size_t sz, int part) {
     printf("read_func hook\n");
@@ -187,6 +224,12 @@ int main() {
     if (fastboot) {
         printf("well since you're asking so nicely...\n");
         *g_boot_mode = 99;
+
+        // Rainbow LED
+        patch = (void*)0x4BD349C8;
+        *patch++ = 0x46C0; // nop
+        *patch = 0x46C0;   // nop
+        create_led_thread();
     }
 
     // The device is unlocked
