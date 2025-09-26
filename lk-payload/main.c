@@ -21,7 +21,7 @@ void _putchar(char character)
 int (*original_read)(struct device_t *dev, uint64_t block_off, void *dst, size_t sz, int part) = (void*)0x4BD2AE2D;
 int (*app)() = (void*)0x4BD341D5;
 
-uint64_t g_boot_a, g_boot_a_x, g_boot_b, g_boot_b_x, g_lk_a, g_lk_b, g_misc, g_recovery;
+uint64_t g_boot_a, g_boot_a_x, g_boot_b, g_boot_b_x, g_expdb, g_lk_a, g_lk_b, g_misc, g_recovery;
 uint8_t boot_recovery = 0;
 
 void set_led_ring(uint8_t colors[12][3]) {
@@ -135,8 +135,18 @@ static void parse_gpt() {
         } else if (memcmp(name, "r\x00\x65\x00\x63\x00o\x00v\x00\x65\x00r\x00y\x00\x00\x00", 18) == 0) {
             printf("found recovery at 0x%08X\n", start);
             g_recovery = start;
+        } else if (memcmp(name, "\x65\x00\x78\x00\x70\x00\x64\x00\x62\x00\x00\x00", 12) == 0) {
+            printf("found expdb at 0x%08X\n", start);
+            g_expdb = start;
         }
     }
+}
+
+void mtk_wdt_reset(void) {
+    volatile uint32_t *wdt_regs = (volatile uint32_t *)0x10007000;
+    wdt_regs[6] = 0x1971;
+    wdt_regs[0] = 0x22000014;
+    wdt_regs[5] = 0x1209;
 }
 
 void (*fastboot_info)(const char *reason) = (void *)(0x4bd34814 | 1);
@@ -179,6 +189,40 @@ void cmd_flash_wrapper(const char *arg, void *data, unsigned sz) {
     cmd_flash(name, data, sz);
 }
 
+void cmd_reboot_recovery(const char *arg, void *data, unsigned sz) {
+    if (g_misc) {
+        fastboot_info("Rebooting into recovery");
+
+        uint8_t bootloader_msg[0x20] = { 0 };
+        strcpy((char*)bootloader_msg, "boot-recovery");
+        
+        struct device_t *dev = get_device();
+        dev->write(dev, bootloader_msg, g_misc * 0x200, 0x20, USER_PART);
+        
+        fastboot_okay("");
+        mtk_wdt_reset();
+    } else {
+        fastboot_fail("No misc partition found!");
+    }
+}
+
+void cmd_reboot_bootloader(const char *arg, void *data, unsigned sz) {
+    if (g_expdb) {
+        fastboot_info("Rebooting into bootloader");
+
+        uint8_t bootloader_msg[0x20] = { 0 };
+        strcpy((char*)bootloader_msg, "boot-amonet");
+        
+        struct device_t *dev = get_device();
+        dev->write(dev, bootloader_msg, g_expdb * 0x200, 0x20, USER_PART);
+        
+        fastboot_okay("");
+        mtk_wdt_reset();
+    } else {
+        fastboot_fail("No expdb partition found!");
+    }
+}
+
 void prepare_fastboot() {
     uint16_t *patch;
   
@@ -188,11 +232,20 @@ void prepare_fastboot() {
     *patch = 0x46C0;   // nop
     fastboot_register("flash", cmd_flash_wrapper, 1);
 
+    // Disable built-in reboot bootloader command
+    patch = (void*)0x4BD34BAE;
+    *patch++ = 0x46C0; // nop
+    *patch++ = 0x46C0; // nop
+    fastboot_register("reboot-bootloader", cmd_reboot_bootloader, 1);
+
     // Rainbow LED
     patch = (void*)0x4BD349C8;
     *patch++ = 0x46C0; // nop
     *patch = 0x46C0;   // nop
     create_led_thread();
+
+    // Add reboot recovery command
+    fastboot_register("oem reboot-recovery", cmd_reboot_recovery, 1);
 }
 
 int main() {
@@ -229,65 +282,70 @@ int main() {
     }
 
     // If mute button is pressed, go to recovery
-    if (detect_power_key()) {
+    else if (detect_power_key()) {
         printf("Mute key pressed, booting recovery\n");
         *g_boot_mode = 2;
     }
 
     // factory and factory advanced boot
-    if(*o_boot_mode == 4 ) {
+    if (*o_boot_mode == 4 ) {
       fastboot = 1;
     }
 
     // use advanced factory mode to boot recovery
-    else if(*o_boot_mode == 6) {
+    else if (*o_boot_mode == 6) {
       *g_boot_mode = 2;
     }
 
-    // Use seperate recovery partition
-    else if(*g_boot_mode == 2){
-        if(g_recovery) {
-          boot_recovery = 1;
-          // kernel checks this to decide whether to enable USB or not
-          *g_boot_mode = 0; 
-        }
-    }
-
-
-
     if (g_misc) {
-      uint8_t bootloader_msg[0x20] = { 0 };
-      dev->read(dev, g_misc * 0x200, bootloader_msg, 0x10, USER_PART);
-      printf("Read bootloader_msg: %s\n", bootloader_msg);
+      uint8_t misc_msg[0x20] = { 0 };
+      uint8_t expdb_msg[0x20] = { 0 };
 
-      if (strncmp(bootloader_msg, "boot-amonet", 11) == 0) {
-        fastboot = 1;
-        memset(bootloader_msg, 0, 0x10);
-        dev->write(dev, bootloader_msg, g_misc * 0x200, 0x10, USER_PART);
+      dev->read(dev, g_misc * 0x200, misc_msg, 0x10, USER_PART);
+      dev->read(dev, g_expdb * 0x200, expdb_msg, 0x10, USER_PART);
+
+      printf("Read msg from misc: %s\n", misc_msg);
+      printf("Read msg from expdb: %s\n", expdb_msg);
+
+      if (strncmp(misc_msg, "boot-recovery", 13) == 0) {
+        *g_boot_mode = 2;
+        memset(misc_msg, 0, 0x10);
+        dev->write(dev, misc_msg, g_misc * 0x200, 0x10, USER_PART);
       }
 
-      else if (strncmp(bootloader_msg, "FASTBOOT_PLEASE", 15) == 0) {
+      if (strncmp(expdb_msg, "boot-amonet", 11) == 0) {
+        fastboot = 1;
+        memset(expdb_msg, 0, 0x10);
+        dev->write(dev, expdb_msg, g_expdb * 0x200, 0x10, USER_PART);
+      }
+
+      // This is because misc gets wiped on every boot?
+      else if (strncmp(expdb_msg, "FASTBOOT_PLEASE", 15) == 0) {
         if (*g_boot_mode == 2) {
-          memset(bootloader_msg, 0, 0x10);
-          dev->write(dev, bootloader_msg, g_misc * 0x200, 0x10, USER_PART);
+          memset(expdb_msg, 0, 0x10);
+          dev->write(dev, expdb_msg, g_expdb * 0x200, 0x10, USER_PART);
         }
         else {
           fastboot = 1;
         }
       }
 
-      else if (strncmp(bootloader_msg, "boot-recovery", 13) == 0) {
-        *g_boot_mode = 2;
-        memset(bootloader_msg, 0, 0x10);
-        dev->write(dev, bootloader_msg, g_misc * 0x200, 0x10, USER_PART);
-      }
-
-      if (strncmp(bootloader_msg + 0x10, "UART_PLEASE", 11) == 0) {
+      if (strncmp(misc_msg + 0x10, "UART_PLEASE", 11) == 0) {
         char* disable_uart = (char*)0x4BD4B0F8;
         strcpy(disable_uart, "printk.disable_uart=0");
         disable_uart = (char*)0x4BD4A56C;
         strcpy(disable_uart, " printk.disable_uart=0");
       }
+    }
+
+    // Use seperate recovery partition
+    if (*g_boot_mode == 2){
+        if(g_recovery) {
+          boot_recovery = 1;
+          printf("Using recovery partition\n");
+          // kernel checks this to decide whether to enable USB or not
+          *g_boot_mode = 0; 
+        }
     }
 
     // Force fastboot mode

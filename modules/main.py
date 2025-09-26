@@ -45,10 +45,10 @@ def dump_binary(dev, path, start_block, max_size=0):
 
 def force_fastboot(dev, gpt):
     switch_user(dev)
-    block = list(dev.emmc_read(gpt["misc"][0]))
+    block = list(dev.emmc_read(gpt["expdb"][0]))
     block[0:16] = "FASTBOOT_PLEASE\x00".encode("utf-8")
-    dev.emmc_write(gpt["misc"][0], bytes(block))
-    block = dev.emmc_read(gpt["misc"][0])
+    dev.emmc_write(gpt["expdb"][0], bytes(block))
+    block = dev.emmc_read(gpt["expdb"][0])
 
 #NOTE: This doesn't actually wipe userdata, it just erases the first 10 blocks.
 #      A new filesystem should be created at next boot.
