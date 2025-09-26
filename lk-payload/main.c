@@ -32,7 +32,7 @@ void set_led_ring(uint8_t colors[12][3]) {
         frame[i*3+2] = colors[i][2];
     }
     led_update(1, frame);
-    led_write(0x25, 0);
+    led_write(0x25, 0); 
 }
 
 void* led_animation_thread(void* arg) {
@@ -50,7 +50,7 @@ void* led_animation_thread(void* arg) {
                 else { frame[i][0] = 0xFF; frame[i][1] = 0x00; frame[i][2] = 0xFF; }
             }
             set_led_ring(frame);
-            thread_sleep(100);
+            thread_sleep(50);
         }
     }
     return NULL;
@@ -139,6 +139,62 @@ static void parse_gpt() {
     }
 }
 
+void (*fastboot_info)(const char *reason) = (void *)(0x4bd34814 | 1);
+void (*fastboot_fail)(const char *reason) = (void *)(0x4bd3485c | 1);
+void (*fastboot_okay)(const char *reason) = (void *)(0x4bd34a20 | 1);
+
+void (*fastboot_register)(const char *prefix, 
+                          void (*handle)(const char *arg, void *data, unsigned sz), 
+                          unsigned char security_enabled) = (void *)(0x4bd345e4 | 1);
+
+void (*cmd_flash)(const char *arg, void *data, unsigned sz) = (void *)(0x4bd36d68 | 1);
+
+void cmd_flash_wrapper(const char *arg, void *data, unsigned sz) {
+    const char *name = arg + 1;
+    
+    if (strncmp(name, "boot_a_amonet", 13) == 0) {
+        printf("boot_a_amonet -> boot_a\n");
+        cmd_flash("boot_a", data, sz);
+        return;
+    }
+
+    if (strncmp(name, "boot_b_amonet", 13) == 0) {
+        printf("boot_b_amonet -> boot_b\n");
+        cmd_flash("boot_b", data, sz);
+        return;
+    }
+    
+    if (strncmp(name, "boot_a", 6) == 0) {
+        printf("boot_a -> boot_a_x\n");
+        cmd_flash("boot_a_x", data, sz);
+        return;
+    }
+
+    if (strncmp(name, "boot_b", 6) == 0) {
+        printf("boot_b -> boot_b_x\n");
+        cmd_flash("boot_b_x", data, sz);
+        return;
+    }
+
+    cmd_flash(name, data, sz);
+}
+
+void prepare_fastboot() {
+    uint16_t *patch;
+  
+    // Disable built-in flash command
+    patch = (void*)0x4BD34B68;
+    *patch++ = 0x46C0; // nop
+    *patch = 0x46C0;   // nop
+    fastboot_register("flash", cmd_flash_wrapper, 1);
+
+    // Rainbow LED
+    patch = (void*)0x4BD349C8;
+    *patch++ = 0x46C0; // nop
+    *patch = 0x46C0;   // nop
+    create_led_thread();
+}
+
 int main() {
     int ret = 0, fastboot = 0;
     uint16_t *patch;
@@ -166,6 +222,18 @@ int main() {
 
     struct device_t *dev = get_device();
 
+    // If action button is pressed, go to fastboot
+    if (mtk_detect_key(KEY_UBER)) {
+        printf("Action key pressed, going to fastboot\n");
+        fastboot = 1;
+    }
+
+    // If mute button is pressed, go to recovery
+    if (detect_power_key()) {
+        printf("Mute key pressed, booting recovery\n");
+        *g_boot_mode = 2;
+    }
+
     // factory and factory advanced boot
     if(*o_boot_mode == 4 ) {
       fastboot = 1;
@@ -185,7 +253,9 @@ int main() {
         }
     }
 
-    if(g_misc) {
+
+
+    if (g_misc) {
       uint8_t bootloader_msg[0x20] = { 0 };
       dev->read(dev, g_misc * 0x200, bootloader_msg, 0x10, USER_PART);
       printf("Read bootloader_msg: %s\n", bootloader_msg);
@@ -224,12 +294,7 @@ int main() {
     if (fastboot) {
         printf("well since you're asking so nicely...\n");
         *g_boot_mode = 99;
-
-        // Rainbow LED
-        patch = (void*)0x4BD349C8;
-        *patch++ = 0x46C0; // nop
-        *patch = 0x46C0;   // nop
-        create_led_thread();
+        prepare_fastboot();
     }
 
     // The device is unlocked

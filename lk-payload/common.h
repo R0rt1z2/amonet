@@ -16,7 +16,8 @@ struct device_t {
 
 struct device_t* (*get_device)() = (void*)0x4BD2B2F1;
 void (*cache_clean)(void *addr, size_t sz) = (void*)0x4BD31444;
-int (*mtk_detect_key)(unsigned short key) = (void*)0x4BD21C38;
+int (*mtk_detect_key)(unsigned short key) = (void*)(0x4BD21C38 | 1);
+int (*detect_power_key)() = (void*)(0x4bd22578 | 1);
 void (*mdelay)(int) = (void*)(0x4BD21B58 | 1);
 
 int (*thread_resume)(thread_t*) = (void*)(0x4BD31FCC | 1);
