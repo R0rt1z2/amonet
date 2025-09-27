@@ -329,14 +329,13 @@ int main() {
           fastboot = 1;
         }
       }
-
-      if (strncmp(misc_msg + 0x10, "UART_PLEASE", 11) == 0) {
-        char* disable_uart = (char*)0x4BD4B0F8;
-        strcpy(disable_uart, "printk.disable_uart=0");
-        disable_uart = (char*)0x4BD4A56C;
-        strcpy(disable_uart, " printk.disable_uart=0");
-      }
     }
+
+    // Unconditionally enable UART
+    char* disable_uart = (char*)0x4BD4B0F8;
+    strcpy(disable_uart, "printk.disable_uart=0");
+    disable_uart = (char*)0x4BD4A56C;
+    strcpy(disable_uart, " printk.disable_uart=0");
 
     // Use seperate recovery partition
     if (*g_boot_mode == 2){
