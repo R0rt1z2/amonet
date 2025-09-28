@@ -50,6 +50,13 @@ def force_fastboot(dev, gpt):
     dev.emmc_write(gpt["expdb"][0], bytes(block))
     block = dev.emmc_read(gpt["expdb"][0])
 
+def reset_bcb(dev, gpt):
+    switch_user(dev)
+    block = bytearray(dev.emmc_read(gpt["misc"][0] + 1))
+    bcb_start = 0x160
+    block[bcb_start:bcb_start+7] = b'\x00\x41\x42\x42\x01\x8f\x8f'
+    dev.emmc_write(gpt["misc"][0] + 1, bytes(block))
+
 #NOTE: This doesn't actually wipe userdata, it just erases the first 10 blocks.
 #      A new filesystem should be created at next boot.
 def wipe_userdata(dev, gpt):
