@@ -89,7 +89,7 @@ def main():
     load_payload(dev, "../brom-payload/build/payload.bin")
 
     # Clear preloader so, we get into bootrom without shorting, should the script stall (we flash preloader as last step)
-    # 10) Downgrade preloader
+    # 1) Downgrade preloader
     log("Clear preloader header")
     switch_boot0(dev)
     flash_data(dev, b"EMMC_BOOT" + b"\x00" * ((0x200 * 8) - 9), 0)
@@ -99,13 +99,12 @@ def main():
         log("Flashing GPT")
         flash_binary(dev, "../bin/gpt-biscuit.bin", 0, 34 * 0x200)
 
-    # 1) Sanity check GPT
+    # 2) Sanity check GPT
     log("Check GPT")
     switch_user(dev)
 
-    # 1.1) Parse gpt
+    # 2.1) Parse gpt
     gpt, gpt_header, part_list = parse_gpt(dev)
-    #log("gpt_parsed = {}".format(gpt))
     if "lk_a" not in gpt or "tee1" not in gpt or "boot_a" not in gpt or "recovery" not in gpt:
         raise RuntimeError("bad gpt")
 
@@ -130,25 +129,24 @@ def main():
         flash_data(dev, backup, gpt_header['last_lba'] + 1)
 
         gpt, gpt_header, part_list = parse_gpt(dev)
-        #log("gpt_parsed = {}".format(gpt))
         if "boot_a_x" not in gpt or "boot_b_x" not in gpt:
             raise RuntimeError("bad gpt")
 
         log("Wipe userdata")
         wipe_userdata(dev, gpt)
 
-    # 2) Sanity check boot0
+    # 3) Sanity check boot0
     log("Check boot0")
     switch_boot0(dev)
 
-    # 3) Sanity check rpmb
+    # 4) Sanity check rpmb
     log("Check rpmb")
     rpmb = dev.rpmb_read()
     if rpmb[0:4] != b"AMZN":
         log("rpmb looks broken; if this is expected (i.e. you're retrying the exploit) press enter, otherwise terminate with Ctrl+C")
         input()
 
-    # 4) Zero out rpmb to enable downgrade
+    # 5) Zero out rpmb to enable downgrade
     log("Downgrade rpmb")
     dev.rpmb_write(b"\x00" * 0x100)
     log("Recheck rpmb")
@@ -157,18 +155,19 @@ def main():
         dev.reboot()
         raise RuntimeError("downgrade failure, giving up")
     log("rpmb downgrade ok")
-    # 7) Downgrade tz
+
+    # 6) Downgrade tz
     log("Flash tz")
     switch_user(dev)
     flash_binary(dev, "../bin/tz.img", gpt["tee1"][0], gpt["tee1"][1] * 0x200)
 
-    # 8) Downgrade lk
+    # 7) Downgrade lk
     log("Flash lk")
     switch_user(dev)
     flash_binary(dev, "../bin/lk.bin", gpt["lk_a"][0], gpt["lk_a"][1] * 0x200)
     flash_binary(dev, "../bin/lk.bin", gpt["lk_b"][0], gpt["lk_b"][1] * 0x200)
 
-    # 9) Flash microloader
+    # 8) Flash microloader
     log("Inject payload")
     switch_user(dev)
     flash_binary(dev, "../bin/boot.hdr", gpt["boot_a"][0], gpt["boot_a"][1] * 0x200)
@@ -180,12 +179,13 @@ def main():
 
     log("Force fastboot")
     force_fastboot(dev, gpt)
-    # 6) Downgrade preloader
+
+    # 9) Downgrade preloader
     log("Flash preloader")
     switch_boot0(dev)
     flash_binary(dev, "../bin/preloader.img", 0)
 
-    # Reboot (to fastboot)
+    # 10) Reboot (to fastboot)
     log("Reboot to unlocked fastboot")
     dev.reboot()
 
