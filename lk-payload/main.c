@@ -21,7 +21,7 @@ void _putchar(char character)
     low_uart_put(character);
 }
 
-int (*original_read)(struct device_t *dev, uint64_t block_off, void *dst, size_t sz, int part) = (void*)0x4BD1E839;
+size_t (*original_read)(struct device_t *dev, uint64_t block_off, void *dst, uint32_t sz, uint32_t part); 
 
 uint64_t g_boot, g_recovery, g_lk, g_misc;
 
@@ -41,14 +41,14 @@ int read_func(struct device_t *dev, uint64_t block_off, void *dst, size_t sz, in
             memset(second_copy, 0, 0x400);
         }
     } else {
+        printf("normal read - from 0x%08X\n", __builtin_return_address(0));
         ret = original_read(dev, block_off, dst, sz, part);
     }
     return ret;
 }
 
-static void parse_gpt() {
+static void parse_gpt(struct device_t *dev) {
     uint8_t raw[0x800] = { 0 };
-    struct device_t *dev = get_device();
     dev->read(dev, 0x400, raw, sizeof(raw), USER_PART);
     for (int i = 0; i < sizeof(raw) / 0x80; ++i) {
         uint8_t *ptr = &raw[i * 0x80];
@@ -72,27 +72,22 @@ static void parse_gpt() {
 }
 
 int main() {
-    int ret = 0;
+    int ret = 0, fastboot = 0;
+    uint16_t *patch;
+    uint32_t *patch32;
+
     printf("This is LK-payload by xyz. Copyright 2019\n");
     printf("Updated version by k4y0z. Copyright 2019\n");
+    printf("Ported to checkers by R0rt1z2. Copyright 2025\n");
 
     uint32_t **argptr = (void*)0x4BD00020;
     uint32_t *arg = *argptr;
     uint32_t* o_boot_mode = (uint32_t*) *argptr + 1; // argptr boot mode
 
-    //hex_dump((void*)*argptr, 0x180);
-
     arg[0x53] = 4; // force 64-bit linux kernel
 
-    int fastboot = 0;
-
-    /*
-    [300] [LK/LCM] lcm_init enter, build type: PVT, vendor type: FITI_KD
-    [300] [LK/LCM] lcm_init No LCM connected. Just Return
-    [340] DSI_WaitForNotBusy:Error:DSI_INTSTA is 0...
-    */
-
-    parse_gpt();
+    struct device_t *dev = get_device();
+    parse_gpt(dev);
 
     if (!g_boot || !g_recovery || !g_lk) {
         printf("failed to find boot, recovery or lk\n");
@@ -100,69 +95,40 @@ int main() {
         fastboot = 1;
     }
 
-    int (*app)() = (void*)0x4BD27109;
+    // Instead of 0x50000, use 0x5D000 to cover injection area
+    dev->read(dev, g_lk * 0x200 + 0x200 + 0x5C000, (char*)LK_BASE + 0x5C000, 0x1000, USER_PART); // +0x200 to skip lk header
 
-    unsigned char overwritten[80] = {
-        0xE9, 0x0A, 0xD0, 0x4B, 0x7D, 0x0E, 0xD0, 0x4B, 0x01, 0x09, 0xD0, 0x4B, 0x31, 0x0B, 0xD0, 0x4B,
-        0x9D, 0x0C, 0xD0, 0x4B, 0x00, 0x84, 0xD5, 0x4B, 0x05, 0x0A, 0xD0, 0x4B, 0x71, 0x0A, 0xD0, 0x4B,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x2D, 0x1B, 0xD0, 0x4B,
-        0xF9, 0x1C, 0xD0, 0x4B, 0xA9, 0x1A, 0xD0, 0x4B, 0x95, 0x1D, 0xD0, 0x4B, 0x19, 0x1A, 0xD0, 0x4B,
-        0xED, 0x1B, 0xD0, 0x4B, 0xA5, 0x19, 0xD0, 0x4B, 0x81, 0x1C, 0xD0, 0x4B, 0x00, 0x00, 0x00, 0x00 
-    };
-    memcpy((void*)0x4BD5C000, overwritten, sizeof(overwritten));
-
-    uint8_t bootloader_msg[0x20] = { 0 };
-
-    void *lk_dst = (void*)0x4BD00000;
-    #define LK_SIZE (0x800 * 0x200)
-
-    struct device_t *dev = get_device();
-
-    //Check if backup payload is present and copy if not
+    // Check if backup payload is present and copy if not
     dev->read(dev, BACKUP_SRC, (void*)0x45000000, PAYLOAD_SIZE, BOOT0_PART); // boot0 partition, read 512K
     if (memcmp((void*)PAYLOAD_DST, (void*)0x45000000, PAYLOAD_SIZE)) {
-	printf("Backup payload not found...\n");
-	printf("...copy payload to backup location\n");
+        printf("Backup payload not found...\n");
+        printf("...copy payload to backup location\n");
         dev->write(dev, (void*)PAYLOAD_DST, BACKUP_SRC, PAYLOAD_SIZE, BOOT0_PART);
     }
 
-    //uint8_t tmp[0x10] = { 0 };
-    //dev->read(dev, g_boot * 0x200 + 0x400, tmp, 0x10, USER_PART);
-    uint8_t *tmp = (void*)0x4BD5C3B0;
-
-    // microloader
-    if (strncmp(tmp, "FASTBOOT_PLEASE", 15) == 0 ) {
+    // Use factory mode to force fastboot
+    if(*o_boot_mode == 4 ) {
       fastboot = 1;
     }
 
-    // factory and factory advanced boot
-    else if(*o_boot_mode == 4 ) {
-      fastboot = 1;
-    }
-
-    // use advanced factory mode to boot recovery
+    // Use advanced factory mode to force recovery
     else if(*o_boot_mode == 6) {
       *g_boot_mode = 2;
     }
 
-    else if(g_misc) {
-      // Read amonet-flag from MISC partition
+    if (g_misc) {
+      uint8_t bootloader_msg[0x20] = { 0 };
       dev->read(dev, g_misc * 0x200, bootloader_msg, 0x20, USER_PART);
-      //dev->read(dev, g_misc * 0x200 + 0x4000, bootloader_msg, 0x10, USER_PART);
-      printf("bootloader_msg: %s\n", bootloader_msg);
+      printf("Read bootloader_msg: %s\n", bootloader_msg);
 
-      // temp flag on MISC
       if(strncmp(bootloader_msg, "boot-amonet", 11) == 0) {
         fastboot = 1;
-        // reset flag
         memset(bootloader_msg, 0, 0x10);
         dev->write(dev, bootloader_msg, g_misc * 0x200, 0x10, USER_PART);
       }
 
-      // perm flag on MISC
       else if(strncmp(bootloader_msg, "FASTBOOT_PLEASE", 15) == 0) {
-        // only reset flag in recovery-boot
-        if(*g_boot_mode == 2) {
+        if (*g_boot_mode == 2) {
           memset(bootloader_msg, 0, 0x10);
           dev->write(dev, bootloader_msg, g_misc * 0x200, 0x10, USER_PART);
         }
@@ -171,66 +137,49 @@ int main() {
         }
       }
 
-      // recovery flag on MISC
       else if(strncmp(bootloader_msg, "boot-recovery", 13) == 0) {
         *g_boot_mode = 2;
-        // reset flag
         memset(bootloader_msg, 0, 0x10);
         dev->write(dev, bootloader_msg, g_misc * 0x200, 0x10, USER_PART);
       }
 
-      // UART flag on MISC
-      if(strncmp(bootloader_msg + 0x10, "UART_PLEASE", 11) == 0) {
-        // Force uart enable
-        char* disable_uart = (char*)0x4BD4BC37;
+      if (strncmp(bootloader_msg + 0x10, "UART_PLEASE", 11) == 0) {
+        char* disable_uart = (char*)0x4BD5EBB8;
+        strcpy(disable_uart, " printk.disable_uart=0");
+        char* disable_uart2 = (char*)0x4BD5F88C;
         strcpy(disable_uart, "printk.disable_uart=0");
       }
-
     }
 
-    uint16_t *patch;
-
-    // force fastboot mode
     if (fastboot) {
-        printf("well since you're asking so nicely...\n");
-
-        patch = (void*)0x4BD2717C;
-        *patch = 0;
-        patch = (void*)0x4BD27182;
-        *patch = 0;
-
-	if(*g_boot_mode == 2) *o_boot_mode = 2;
-
-        video_printf("=> HACKED FASTBOOT mode: (%d) - xyz, k4y0z\n", *o_boot_mode);
-    }
-    else if(*g_boot_mode == 2) {
-        video_printf("=> RECOVERY mode...");
+      printf("Well since you're asking so nicely...\n");
+      video_printf("=> HACKED FASTBOOT mode: (%d) - xyz, k4y0z, R0rt1z2\n", *o_boot_mode);
+      *g_boot_mode = 99;
     }
 
-    printf("g_boot_mode %u\n", *g_boot_mode);
-    printf("o_boot_mode %u\n", *o_boot_mode);
-
-    // enable all commands
-    patch = (void*)0x4BD0D838;
+    // Enable all commands
+    patch = (void*)0x4bd0d854;
     *patch++ = 0x2000; // movs r0, #0
     *patch = 0x4770;   // bx lr
 
-    // device is unlocked
-    patch = (void*)0x4BD01E84;
+    // Device is unlocked
+    patch = (void*)0x4bd01ea0;
     *patch++ = 0x2001; // movs r0, #1
     *patch = 0x4770;   // bx lr
 
-    // hook bootimg read function
-    uint32_t *patch32;
+    // Hook bootimg read function
+    original_read = (void*)dev->read;
     patch32 = (void*)&dev->read;
     *patch32 = (uint32_t)read_func;
 
-    patch32 = (void*)0x4BD681B8;
-    *patch32 = 1; // // force 64-bit linux kernel
+    // This device seems to use a 32 bit kernel
+    // patch32 = (void*)0x4BD681B8;
+    //*patch32 = 1; // force 64-bit linux kernel
 
     printf("Clean lk\n");
-    cache_clean(lk_dst, LK_SIZE);
+    cache_clean((void *)LK_BASE, LK_SIZE);
 
+    int (*app)() = (void*)(0x4bd263e0|1);
     app();
 
     while (1) {

