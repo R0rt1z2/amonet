@@ -1,6 +1,7 @@
 #include "libc.h"
 
 #include <stdarg.h>
+#include <string.h>
 
 void _putchar(char character);
 
@@ -294,4 +295,25 @@ int memcmp(const void* s1, const void* s2,size_t n)
         else
             p1++,p2++;
     return 0;
+}
+
+char *
+strstr(const char *s, const char *find)
+{
+	char c, sc;
+	size_t len;
+
+	c = *find++;
+	if (c != 0) {
+		len = strlen(find);
+		do {
+			do {
+				sc = *s++;
+				if (sc == 0)
+				return NULL;
+			} while (sc != c);
+		} while (strncmp(s, find, len) != 0);
+	s--;
+	}
+	return (char *)s;
 }

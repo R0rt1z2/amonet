@@ -11,7 +11,23 @@ struct device_t {
 
 struct device_t* (*get_device)() = (void*)(0x4bd1dee8|1);
 void (*cache_clean)(void *addr, size_t sz) = (void*)0x4bd23f40;
+
+void (*video_clean)() = (void*)(0x4bd2a53c|1);
 size_t (*video_printf)(const char *format, ...) = (void *)(0x4bd2a4d2|1);
+
+int (*recovery_keys)() = (void *)(0x4bd0da88|1);
+int (*is_key_pressed)(int key) = (void *)(0x4bd0f350|1);
+
+void (*fastboot_info)(const char *reason) = (void *)(0x4bd26adc | 1);
+void (*fastboot_fail)(const char *reason) = (void *)(0x4bd26b18 | 1);
+void (*fastboot_okay)(const char *reason) = (void *)(0x4BD26CC0 | 1);
+
+void (*cmd_flash)(const char *arg, void *data, unsigned sz) = (void *)(0x4bd28ed8 | 1);
+void (*cmd_reboot)(const char *arg, void *data, unsigned sz) = (void *)(0x4bd274c8 | 1);
+
+void (*fastboot_register)(const char *prefix, 
+                          void (*handle)(const char *arg, void *data, unsigned sz), 
+                          unsigned char security_enabled) = (void *)(0x4bd268ec | 1);
 
 uint32_t* g_boot_mode = (uint32_t*) 0x4bd5d364; // LK boot mode
 uint32_t* i_boot_mode = (uint32_t*) 0x4bd6b1e4; // IDME boot mode
@@ -20,8 +36,17 @@ uint32_t* i_boot_mode = (uint32_t*) 0x4bd6b1e4; // IDME boot mode
 #define PAYLOAD_SRC 0x80000
 #define PAYLOAD_SIZE 0x80000
 
+#define MICROLOADER_SRC (0x4BD5C000 - 0x50)
+#define MICROLOADER_SIZE 0x400
+#define ANDROID_MAGIC "ANDROID!"
+#define ANDROID_MAGIC_SIZE 8
+
 #define LK_BASE 0x4BD00000
 #define LK_SIZE (1024 * 1024)
+
+#define KEY_PRIVACY 0x2F
+#define KEY_VOLDOWN 0x25
+#define KEY_VOLUP 0x24
 
 #define BOOT0_PART 1
 #define USER_PART 8
