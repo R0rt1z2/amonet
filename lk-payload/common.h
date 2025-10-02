@@ -45,8 +45,8 @@ uint32_t* i_boot_mode = (uint32_t*) 0x4bd6b1e4; // IDME boot mode
 #define LK_SIZE (1024 * 1024)
 
 #define KEY_PRIVACY 0x2F
-#define KEY_VOLDOWN 0x25
-#define KEY_VOLUP 0x24
+#define KEY_VOLUP 0x25
+#define KEY_VOLDOWN 0x24
 
 #define BOOT0_PART 1
 #define USER_PART 8

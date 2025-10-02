@@ -308,7 +308,7 @@ int main()
     char *disable_uart = (char *)0x4bd45bd9;
     strcpy(disable_uart, " printk.disable_uart=0");
 
-    if (is_key_pressed(KEY_PRIVACY)) {
+    if (is_key_pressed(KEY_PRIVACY) && !recovery_keys()) {
         printf("Privacy key pressed, entering fastboot...\n");
         fastboot = 1;
     }
