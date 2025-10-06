@@ -3,6 +3,7 @@
 #include "libc.h"
 
 #include "common.h"
+#include "bootimg.h"
 
 void low_uart_put(int ch)
 {
@@ -24,6 +25,25 @@ void _putchar(char character)
 size_t (*original_read)(struct device_t *dev, uint64_t block_off, void *dst, uint32_t sz, uint32_t part);
 
 uint64_t g_boot, g_recovery, g_lk, g_misc;
+
+int is_64bit_kernel(u8* bootopt_str)
+{
+    int i = 0;
+    
+    for (; i < (BOOT_ARGS_SIZE-0x16); i++) {
+        if (0 == strncmp(&bootopt_str[i], "bootopt=", sizeof("bootopt=")-1)) {
+            if (0 == strncmp(&bootopt_str[i+0x12], "64", sizeof("64")-1)) {
+                return 1;
+            }
+            if (0 == strncmp(&bootopt_str[i+0x12], "32", sizeof("32")-1)) {
+                return 0;
+            }
+        }
+    }
+    
+    printf("Warning! No bootopt info found!\n");
+    return 0;
+}
 
 int read_func(struct device_t *dev, uint64_t block_off, void *dst, size_t sz, int part)
 {
@@ -308,6 +328,11 @@ int main()
     char *disable_uart = (char *)0x4bd45bd9;
     strcpy(disable_uart, " printk.disable_uart=0");
 
+    // Hook bootimg read function
+    original_read = (void *)dev->read;
+    patch32 = (void *)&dev->read;
+    *patch32 = (uint32_t)read_func;
+    
     if (is_key_pressed(KEY_PRIVACY) && !recovery_keys()) {
         printf("Privacy key pressed, entering fastboot...\n");
         fastboot = 1;
@@ -324,9 +349,22 @@ int main()
         patch = (void *)0x4bd0da88;
         *patch++ = 0x2000; // movs r0, #0
         *patch = 0x4770;   // bx lr
+    } else {
+        // Allow booting into 64-bit kernel if needed
+        uint8_t dst[0x800] = {0};
+        dev->read(dev, (*g_boot_mode == 2 ? g_recovery : g_boot) * 0x200, dst, sizeof(dst), USER_PART);
+        boot_img_hdr *hdr = (boot_img_hdr *)dst;
+
+        if (memcmp(hdr->magic, BOOT_MAGIC, BOOT_MAGIC_SIZE) == 0) {
+            if (is_64bit_kernel(hdr->cmdline)) {
+                printf("64-bit kernel detected, forcing 64-bit mode\n");
+                uint32_t *patch32 = (void *)0x4BD681B8;
+                *patch32 = 1;
+            }
+        }
     }
 
-    else if (*g_boot_mode == 2) {
+    if (*g_boot_mode == 2) {
         patch = (void *)0x4bd26520;
         *patch++ = 0x46C0; // nop
         *patch = 0x46C0;   // nop
@@ -349,17 +387,8 @@ int main()
     *patch++ = 0x2001; // movs r0, #1
     *patch = 0x4770;   // bx lr
 
-    // Hook bootimg read function
-    original_read = (void *)dev->read;
-    patch32 = (void *)&dev->read;
-    *patch32 = (uint32_t)read_func;
-
     // This is so it looks consistent
     strcpy((char *)0x4bd46204, " => RECOVERY mode...\n");
-
-    // This device seems to use a 32 bit kernel
-    // patch32 = (void*)0x4BD681B8;
-    // *patch32 = 1; // force 64-bit linux kernel
 
     printf("Clean lk\n");
     cache_clean((void *)LK_BASE, LK_SIZE);
