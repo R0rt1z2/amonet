@@ -215,6 +215,12 @@ void cmd_flash_wrapper(const char *arg, void *data, unsigned sz)
         }
         return;
     }
+    else if (strstr(arg, "_amonet")) {
+        char new_arg[32] = {0};
+        strncpy(new_arg, arg, strstr(arg, "_amonet") - arg);
+        cmd_flash(new_arg, data, sz);
+        return;
+    }
 
     cmd_flash(arg, data, sz);
 }

@@ -244,6 +244,13 @@ strcpy(char *to, const char *from)
     return(save);
 }
 
+char *strncpy(char *dest, char const *src, size_t count) {
+	char *tmp = dest;
+    while(count-- && (*dest++ = *src++) != '\0')
+    ;
+	return tmp;
+}
+
 char *
 strcat(char *dest, const char *src)
 {
