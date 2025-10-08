@@ -15,11 +15,14 @@ mkdir -p dist/unlock/amonet/brom-payload/build
 cp brom-payload/build/payload.bin dist/unlock/amonet/brom-payload/build/
 
 cp {bootrom-step.sh,fastboot-step.sh,boot-fastboot.sh,boot-recovery.sh} dist/unlock/amonet/
+chmod +x dist/unlock/amonet/*.sh
 
 mkdir -p dist/unlock/META-INF/com/google/android
 cp META-INF/com/google/android/{update-binary,updater-script} dist/unlock/META-INF/com/google/android/
 
+mkdir -p dist/gptfix/amonet/bin
 cp gpt-fix.sh dist/gptfix/amonet/
+chmod +x dist/gptfix/amonet/gpt-fix.sh
 cp bin/gpt-checkers.bin dist/gptfix/amonet/bin/
 
 mkdir -p dist/full
