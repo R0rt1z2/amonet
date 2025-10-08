@@ -329,10 +329,11 @@ int main()
             memset(bootloader_msg, 0, 0x10);
             dev->write(dev, bootloader_msg, g_misc * 0x200, 0x10, USER_PART);
         }
-    }
 
-    char *disable_uart = (char *)0x4bd45bd9;
-    strcpy(disable_uart, " printk.disable_uart=0");
+        if (strncmp(bootloader_msg + 0x10, "UART_PLEASE", 11) == 0) {
+            strcpy((char *)0x4bd45bd9, " printk.disable_uart=0");
+        }
+    }
 
     // Hook bootimg read function
     original_read = (void *)dev->read;
