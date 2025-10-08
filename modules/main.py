@@ -160,27 +160,20 @@ def main():
     log("rpmb downgrade ok")
     dev.kick_watchdog()
 
-    if not minimal:
-        # 6) Install preloader
-        log("Flash preloader")
-        switch_boot0(dev)
-        flash_binary(dev, "../bin/preloader.bin", 8)
-        flash_binary(dev, "../bin/preloader.bin", 520)
+    # 6) Install lk-payload
+    log("Flash lk-payload")
+    switch_boot0(dev)
+    flash_binary(dev, "../lk-payload/build/payload.bin", 1024)
 
-        # 6) Install lk-payload
-        log("Flash lk-payload")
-        switch_boot0(dev)
-        flash_binary(dev, "../lk-payload/build/payload.bin", 1024)
+    # 7) Downgrade tz
+    log("Flash tz")
+    switch_user(dev)
+    flash_binary(dev, "../bin/tz.img", gpt["tee1"][0], gpt["tee1"][1] * 0x200)
 
-        # 7) Downgrade tz
-        log("Flash tz")
-        switch_user(dev)
-        flash_binary(dev, "../bin/tz.img", gpt["tee1"][0], gpt["tee1"][1] * 0x200)
-
-        # 8) Downgrade lk
-        log("Flash lk")
-        switch_user(dev)
-        flash_binary(dev, "../bin/lk.bin", gpt["lk"][0], gpt["lk"][1] * 0x200)
+    # 8) Downgrade lk
+    log("Flash lk")
+    switch_user(dev)
+    flash_binary(dev, "../bin/lk.bin", gpt["lk"][0], gpt["lk"][1] * 0x200)
 
     # 9) Flash microloader
     log("Inject microloader")
@@ -191,20 +184,15 @@ def main():
     if boot_hdr2[0:8] != b"ANDROID!":
         flash_data(dev, boot_hdr1, gpt["boot"][0] + 2, 2 * 0x200)
 
-    if not minimal:
-        log("Force fastboot")
-        force_fastboot(dev, gpt)
-    else:
-        log("Force recovery")
-        force_recovery(dev, gpt)
+    log("Force fastboot")
+    force_fastboot(dev, gpt)
 
     # 10) Downgrade preloader
-    log("Flash preloader header")
+    log("Flash preloader")
     switch_boot0(dev)
-    flash_binary(dev, "../bin/preloader.hdr0", 0, 4)
-    flash_binary(dev, "../bin/preloader.hdr1", 4, 4)
+    flash_binary(dev, "../bin/preloader.img", 0)
 
-    # Reboot (to fastboot or recovery)
+    # 11) Reboot (to fastboot)
     log("Reboot")
     dev.reboot()
 
