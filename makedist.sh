@@ -25,5 +25,13 @@ cp gpt-fix.sh dist/gptfix/amonet/
 chmod +x dist/gptfix/amonet/gpt-fix.sh
 cp bin/gpt-checkers.bin dist/gptfix/amonet/bin/
 
+set +e
+cp bin/fastboot* dist/unlock/amonet/bin/ 2>/dev/null || true
+cp bin/*.dll dist/unlock/amonet/bin/ 2>/dev/null || true
+cp bin/full*.img dist/unlock/amonet/bin/ 2>/dev/null || true
+cp {fastbrick.sh,fastbrick.bat,fastbrick.ps1} dist/unlock/amonet/ 2>/dev/null || true
+chmod +x dist/unlock/amonet/fastbrick.* 2>/dev/null || true
+set -e
+
 mkdir -p dist/full
 cp -r dist/unlock/* dist/full/
