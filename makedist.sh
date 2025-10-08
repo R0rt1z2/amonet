@@ -24,4 +24,3 @@ cp bin/gpt-checkers.bin dist/gptfix/amonet/bin/
 
 mkdir -p dist/full
 cp -r dist/unlock/* dist/full/
-cp -r dist/stock/* dist/full/
