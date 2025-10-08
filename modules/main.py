@@ -119,6 +119,11 @@ def main():
             time.sleep(1)
         minimal = True
 
+    if len(sys.argv) == 2 and sys.argv[1] == "fixgpt":
+        dev.emmc_switch(0)
+        log("Flashing GPT")
+        flash_binary(dev, "../bin/gpt-checkers.bin", 0, 34 * 0x200)
+
     # 1) Sanity check GPT
     log("Check GPT")
     switch_user(dev)
