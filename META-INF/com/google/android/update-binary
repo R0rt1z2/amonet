@@ -1,10 +1,11 @@
 #!/sbin/sh -x
 # amonet updater
 # Copyright (C) 2019 k4y0z @ xda-developers
+# Copyright (C) 2025 R0rt1z2
 
 PAYLOAD_BLOCK=1024
 
-PART_PREFIX=/dev/block/platform/soc/11230000.mmc
+PART_PREFIX=/dev/block/platform/soc
 
 # detect whether in boot mode
 getprop | grep zygote | grep -q running && bootMode=true || bootMode=false
@@ -72,7 +73,7 @@ if [ "$?" -eq "0" ]; then
   done
 fi
 
-check_product "karnak" " - Amazon Fire HD 8 (2018 / 8th gen) - "
+check_product "checkers" " - Amazon Echo Show 5 (2019 / 1st Gen) - "
 
 TMPDIR=/dev/tmp
 INSTALLER=$TMPDIR/install
@@ -81,7 +82,7 @@ INSTALLER=$TMPDIR/install
 rm -rf $TMPDIR 2>/dev/null
 mkdir -p $INSTALLER 2>/dev/null
 
-unzip -o "$ZIP" 'amonet/bin/twrp.img' 'amonet/lk-payload/build/payload.bin' 'amonet/bin/preloader.hdr0', 'amonet/bin/preloader.hdr1', 'amonet/bin/preloader.bin', 'amonet/bin/tz.img' 'amonet/bin/boot0.gpt' -d $INSTALLER >&2
+unzip -o "$ZIP" 'amonet/bin/twrp.img' 'amonet/lk-payload/build/payload.bin' -d $INSTALLER >&2
 
 ##########################################################################################
 # Main
@@ -96,43 +97,22 @@ dd if=${INSTALLER}/amonet/bin/twrp.img of=${PART_PREFIX}/by-name/recovery
 dd if=${PART_PREFIX}/by-name/recovery of=/tmp/recovery_amonet.hdr bs=512 count=2
 dd if=${PART_PREFIX}/by-name/boot of=/tmp/boot_amonet.hdr bs=512 count=2
 dd if=${PART_PREFIX}/by-name/boot of=/tmp/boot_amonet.hdr2 bs=512 count=2 skip=2
+
 grep "ANDROID!" /tmp/boot_amonet.hdr2
 if [ $? -ne 0 ] ; then
     ui_print "- patching boot"
     dd if=/tmp/boot_amonet.hdr of=${PART_PREFIX}/by-name/boot bs=512 count=2 seek=2
 fi
+
 ui_print "- updating microloader"
 dd if=${INSTALLER}/amonet/bin/twrp.img of=${PART_PREFIX}/by-name/boot bs=512 count=2
 
 echo 0 > /sys/block/mmcblk0boot0/force_ro
 
-#ui_print "- updating preloader"
-#dd if=/${INSTALLER}/amonet/bin/preloader.hdr0 of=/dev/block/mmcblk0boot0 bs=512 count=4
-#dd if=/${INSTALLER}/amonet/bin/preloader.hdr1 of=/dev/block/mmcblk0boot0 bs=512 seek=4 count=4
-#dd if=/${INSTALLER}/amonet/bin/preloader.bin of=/dev/block/mmcblk0boot0 bs=512 seek=8
-
-ui_print "- updating backup PL"
-dd if=/${INSTALLER}/amonet/bin/preloader.bin of=/dev/block/mmcblk0boot0 bs=512 seek=520 count=504
-
-ui_print "- checking for GPT on boot0"
-if [[ ! $(dd if=/dev/block/mmcblk0boot0 bs=512 skip=2047 | grep "EFI PART" ) ]]; then
-  ui_print "-- no GPT found, likely nuked by following previous advice to brick preloader"
-  ui_print "-- restoring GPT"
-  dd if=/${INSTALLER}/amonet/bin/boot0.gpt of=/dev/block/mmcblk0boot0 bs=512 seek=2015
-else
-  ui_print "-- GPT present, all good"
-fi
-
 ui_print "- updating payload"
 dd if=/${INSTALLER}/amonet/lk-payload/build/payload.bin of=/dev/block/mmcblk0boot0 bs=512 seek=${PAYLOAD_BLOCK}
 
 echo 1 > /sys/block/mmcblk0boot0/force_ro
-
-#ui_print "- updating TEE1"
-#dd if=/${INSTALLER}/amonet/bin/tz.img of=${PART_PREFIX}/by-name/TEE1_real
-
-#ui_print "- updating TEE2"
-#dd if=/${INSTALLER}/amonet/bin/tz.img of=${PART_PREFIX}/by-name/TEE2_real
 
 ui_print "- Update complete"
 ui_print " "
