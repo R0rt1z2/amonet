@@ -82,7 +82,7 @@ INSTALLER=$TMPDIR/install
 rm -rf $TMPDIR 2>/dev/null
 mkdir -p $INSTALLER 2>/dev/null
 
-unzip -o "$ZIP" 'amonet/bin/twrp.img' 'amonet/lk-payload/build/payload.bin' -d $INSTALLER >&2
+unzip -o "$ZIP" 'amonet/bin/twrp.img' 'amonet/lk-payload/build/payload.bin' 'amonet/bin/microloader.bin' -d $INSTALLER >&2
 
 ##########################################################################################
 # Main
@@ -105,7 +105,7 @@ if [ $? -ne 0 ] ; then
 fi
 
 ui_print "- updating microloader"
-dd if=${INSTALLER}/amonet/bin/twrp.img of=${PART_PREFIX}/by-name/boot bs=512 count=2
+dd if=${INSTALLER}/amonet/bin/microloader.bin of=${PART_PREFIX}/by-name/boot bs=512 count=2
 
 echo 0 > /sys/block/mmcblk0boot0/force_ro
 
