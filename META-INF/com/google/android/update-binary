@@ -73,7 +73,7 @@ if [ "$?" -eq "0" ]; then
   done
 fi
 
-check_product "checkers" " - Amazon Echo Show 5 (2019 / 1st Gen) - "
+check_product "crown" " - Amazon Echo Show 8 (2019 / 1st Gen) - "
 
 TMPDIR=/dev/tmp
 INSTALLER=$TMPDIR/install

@@ -23,7 +23,7 @@ cp META-INF/com/google/android/{update-binary,updater-script} dist/unlock/META-I
 mkdir -p dist/gptfix/amonet/bin
 cp gpt-fix.sh dist/gptfix/amonet/
 chmod +x dist/gptfix/amonet/gpt-fix.sh
-cp bin/gpt-checkers.bin dist/gptfix/amonet/bin/
+cp bin/gpt-crown.bin dist/gptfix/amonet/bin/
 
 set +e
 cp bin/fastboot* dist/unlock/amonet/bin/ 2>/dev/null || true
