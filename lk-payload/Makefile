@@ -11,7 +11,7 @@ BUILD_DIR := ./build
 TARGET := payload
 
 C_SRC = main.c libc.c
-ASM_SRC = start.S
+ASM_SRC = start.S images.S
 
 OBJ = $(C_SRC:%.c=$(BUILD_DIR)/%.o) $(ASM_SRC:%.S=$(BUILD_DIR)/%.o)
 DEP = $(OBJ:%.o=%.d)

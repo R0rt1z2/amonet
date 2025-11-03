@@ -42,7 +42,7 @@ uint32_t* i_boot_mode = (uint32_t*) 0x4bd6b1e4; // IDME boot mode
 #define ANDROID_MAGIC_SIZE 8
 
 #define LK_BASE 0x4BD00000
-#define LK_SIZE (1024 * 1024)
+#define LK_SIZE (0x800 * 0x200)
 
 #define KEY_PRIVACY 0x2F
 #define KEY_VOLUP 0x25
@@ -52,3 +52,12 @@ uint32_t* i_boot_mode = (uint32_t*) 0x4bd6b1e4; // IDME boot mode
 #define USER_PART 8
 
 #define BACKUP_SRC 0x200000
+
+#define CACHE_LINE 32
+
+#define ICACHE 1
+#define DCACHE 2
+#define UCACHE (ICACHE | DCACHE)
+
+#define MMSYS_BASE 0x14000000
+#define MMSYS_SW0_B_RST (MMSYS_BASE + 0x140)
