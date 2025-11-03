@@ -165,22 +165,17 @@ def main():
     log("rpmb downgrade ok")
     dev.kick_watchdog()
 
-    # 6) Install lk-payload
-    log("Flash lk-payload")
-    switch_boot0(dev)
-    flash_binary(dev, "../lk-payload/build/payload.bin", 1024)
-
-    # 7) Downgrade tz
+    # 6) Downgrade tz
     log("Flash tz")
     switch_user(dev)
     flash_binary(dev, "../bin/tz.img", gpt["tee1"][0], gpt["tee1"][1] * 0x200)
 
-    # 8) Downgrade lk
+    # 7) Downgrade lk
     log("Flash lk")
     switch_user(dev)
     flash_binary(dev, "../bin/lk.bin", gpt["lk"][0], gpt["lk"][1] * 0x200)
 
-    # 9) Flash microloader
+    # 8) Flash microloader
     log("Inject microloader")
     switch_user(dev)
     boot_hdr1 = dev.emmc_read(gpt["boot"][0]) + dev.emmc_read(gpt["boot"][0] + 1)
@@ -192,10 +187,15 @@ def main():
     log("Force fastboot")
     force_fastboot(dev, gpt)
 
-    # 10) Downgrade preloader
+    # 9) Downgrade preloader
     log("Flash preloader")
     switch_boot0(dev)
     flash_binary(dev, "../bin/preloader.img", 0)
+
+    # 10) Install lk-payload
+    log("Flash lk-payload")
+    switch_boot0(dev)
+    flash_binary(dev, "../lk-payload/build/payload.bin", 1024)
 
     # 11) Reboot (to fastboot)
     log("Reboot")
