@@ -131,7 +131,7 @@ def main():
     # 1.1) Parse gpt
     gpt = parse_gpt(dev)
     log("gpt_parsed = {}".format(gpt))
-    if "lk" not in gpt or "tee1" not in gpt or "boot" not in gpt or "recovery" not in gpt:
+    if "lk" not in gpt or "tee1" not in gpt or "boot" not in gpt or "recovery" not in gpt or "swdl" not in gpt:
         raise RuntimeError("bad gpt")
 
     # 2) Sanity check boot0
@@ -174,6 +174,8 @@ def main():
     log("Flash lk")
     switch_user(dev)
     flash_binary(dev, "../bin/lk.bin", gpt["lk"][0], gpt["lk"][1] * 0x200)
+    switch_user(dev)
+    flash_binary(dev, "../bin/crown-kaeru.bin", gpt["swdl"][0], gpt["swdl"][1] * 0x200)
 
     # 8) Flash microloader
     log("Inject microloader")
