@@ -262,7 +262,7 @@ int main()
         !is_key_pressed(KEY_VOLUP) &&
         !is_key_pressed(KEY_PRIVACY))
     {
-        printf("Privacy key pressed, entering fastboot...\n");
+        printf("Volume down, entering fastboot...\n");
         goto fastboot;
     }
 
