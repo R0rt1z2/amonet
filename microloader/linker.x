@@ -12,8 +12,5 @@ SECTIONS
   .data     : { *(.data   .data.*   .gnu.linkonce.d.*) }
   .bss      : { *(.bss    .bss.*    .gnu.linkonce.b.*) *(COMMON) }
 
-  . = ALIGN(4096);
-  .bootloader : { *(.bootloader) }
-
   /DISCARD/ : { *(.interp) *(.dynsym) *(.dynstr) *(.hash) *(.dynamic) *(.comment) }
 }

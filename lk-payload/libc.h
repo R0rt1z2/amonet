@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stdint.h>
+
 /** \name Fixed width integers
  *  @{
  */
@@ -28,3 +30,4 @@ char *strstr(const char *s, const char *find);
 
 int puts(const char *line);
 int memcmp(const void* s1, const void* s2,size_t n);
+int strwcmp(const uint8_t *s1, const char *s2);
