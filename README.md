@@ -2,7 +2,7 @@
 
 This is an exploit chain for Echo Show 8 (2019) (1st gen / crown / AEOCW). It contains a MediaTek bootrom exploit and a LittleKernel bootloader exploit.
 
-For installation instructions, see https://xdaforums.com/t/unlock-root-twrp-unbrick-amazon-echo-show-5-1st-gen-2019-checkers.4762900/
+For installation instructions, see https://xdaforums.com/t/unlock-root-twrp-unbrick-amazon-echo-show-8-1st-gen-2019-crown.4766687/
 
 ## License
 
