@@ -3,7 +3,7 @@
 rm -rf dist
 
 mkdir -p dist/unlock/amonet/bin
-cp bin/{preloader.img,lk.bin,tz.img,twrp.img,microloader.bin} dist/unlock/amonet/bin/
+cp bin/{preloader.img,lk.bin,crown-kaeru.bin,tz.img,twrp.img,microloader.bin} dist/unlock/amonet/bin/
 
 mkdir -p dist/unlock/amonet/lk-payload/build
 cp lk-payload/build/payload.bin dist/unlock/amonet/lk-payload/build/
