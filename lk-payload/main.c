@@ -239,6 +239,14 @@ void prepare_fastboot()
     fastboot_register("flash:", cmd_flash_wrapper, 1);
 }
 
+void set_boot_mode(int mode) {
+    *g_boot_mode = mode;
+}
+
+int get_boot_mode() {
+    return *g_boot_mode;
+}
+
 int main() {
     int ret = 0, fastboot = 0;
     uint16_t *patch;
@@ -278,7 +286,7 @@ int main() {
 
     if (is_volume_up_pressed()) {
         printf("volume up pressed, entering recovery mode\n");
-        *g_boot_mode = 2;
+        set_boot_mode(2);
     }
 
     // Use factory mode to force fastboot
@@ -288,7 +296,7 @@ int main() {
 
     // Use advanced factory mode to force recovery
     else if (*o_boot_mode == 6) {
-        *g_boot_mode = 2;
+        set_boot_mode(2);
     }
 
     if (g_misc) {
@@ -313,7 +321,7 @@ int main() {
         }
 
         else if (strncmp((char *)bootloader_msg, "boot-recovery", 13) == 0) {
-            *g_boot_mode = 2;
+            set_boot_mode(2);
             memset(bootloader_msg, 0, 0x10);
             dev->write(dev, bootloader_msg, g_misc * 0x200, 0x10, USER_PART);
         }
@@ -364,7 +372,7 @@ int main() {
     // strcpy((char*)0x4606F5BC, " - what is that?");
 
     if (fastboot) {
-	  *g_boot_mode = 99;
+	  set_boot_mode(99);
       prepare_fastboot();
 
       printf("Well since you're asking so nicely...\n");
@@ -376,7 +384,7 @@ int main() {
     // parsing. This fails because amonet crafts a malicious boot image with a heavily modified boot
     // header. Since DTB is required for kernel boot, we force the bootloader to load DTB after we
     // have hooked the read function to properly handle our crafted boot image structure.
-    bldr_load_dtb((*g_boot_mode != 2) ? "boot" : "recovery");
+    bldr_load_dtb((get_boot_mode() != 2) ? "boot" : "recovery");
 
     arch_clean_invalidate_cache_range(LK_BASE, LK_SIZE);
 
