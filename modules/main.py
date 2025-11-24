@@ -90,6 +90,12 @@ def main(dev, args):
     if boot_hdr2[0:8] != b"ANDROID!":
         flash_data(dev, boot_hdr1, gpt["boot"][0] + 2, 2 * 0x200)
 
+    recovery_hdr1 = dev.emmc_read(gpt["recovery"][0]) + dev.emmc_read(gpt["recovery"][0] + 1)
+    recovery_hdr2 = dev.emmc_read(gpt["recovery"][0] + 2) + dev.emmc_read(gpt["recovery"][0] + 3)
+    flash_binary(dev, "../bin/microloader.bin", gpt["recovery"][0], 2 * 0x200)
+    if recovery_hdr2[0:8] != b"ANDROID!":
+        flash_data(dev, recovery_hdr1, gpt["recovery"][0] + 2, 2 * 0x200)
+
     # 5) Wait some time so data is flushed to EMMC
     time.sleep(5)
 

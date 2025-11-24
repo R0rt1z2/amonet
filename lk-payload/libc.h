@@ -1,5 +1,7 @@
 #pragma once
 
+#include <inttypes.h>
+
 /** \name Fixed width integers
  *  @{
  */
@@ -13,16 +15,21 @@ typedef u32_t u32;
 typedef u16_t u16;
 typedef u8_t u8;
 
+#define NULL ((void *)0)
+
 typedef unsigned size_t;
 
 size_t strlen(const char *str);
 int printf(const char *format, ...);
 int sprintf (char *str, const char *format, ...);
 char *strcpy(char *to, const char *from);
+char *strncpy(char *dest, char const *src, size_t count);
 int strncmp(const char *s1, const char *s2, u32_t n);
 void*  memset(void*  dst, int c, u32_t n);
 void *memcpy(void *dest, const void *src, size_t n);
 int strcmp(const char *s1, const char *s2);
+char *strstr(const char *s, const char *find);
 
 int puts(const char *line);
 int memcmp(const void* s1, const void* s2,size_t n);
+int strwcmp(const uint8_t *s1, const char *s2);

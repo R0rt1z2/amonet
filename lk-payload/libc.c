@@ -243,6 +243,13 @@ strcpy(char *to, const char *from)
     return(save);
 }
 
+char *strncpy(char *dest, char const *src, size_t count) {
+	char *tmp = dest;
+    while(count-- && (*dest++ = *src++) != '\0')
+    ;
+	return tmp;
+}
+
 char *
 strcat(char *dest, const char *src)
 {
@@ -293,5 +300,44 @@ int memcmp(const void* s1, const void* s2,size_t n)
             return *p1 - *p2;
         else
             p1++,p2++;
+    return 0;
+}
+
+char *
+strstr(const char *s, const char *find)
+{
+	char c, sc;
+	size_t len;
+
+	c = *find++;
+	if (c != 0) {
+		len = strlen(find);
+		do {
+			do {
+				sc = *s++;
+				if (sc == 0)
+				return NULL;
+			} while (sc != c);
+		} while (strncmp(s, find, len) != 0);
+	s--;
+	}
+	return (char *)s;
+}
+
+int strwcmp(const uint8_t *s1, const char *s2)
+{
+    int i = 0;
+    
+    while (s2[i] != '\0' && i < 36) {
+        if (s1[i * 2] != s2[i] || s1[i * 2 + 1] != 0) {
+            return 1;
+        }
+        i++;
+    }
+    
+    if (s1[i * 2] != 0 || s1[i * 2 + 1] != 0) {
+        return 1;
+    }
+    
     return 0;
 }

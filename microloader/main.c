@@ -1,7 +1,10 @@
 #include "../lk-payload/common.h"
 
 int main() {
+    // We need to clean the cache first, since we jumped straight to the payload
     dprintf("microloader\n");
+    arch_clean_invalidate_cache_range(MICROLOADER_SRC, MICROLOADER_SIZE);
+
     part_dev_t *dev = mt_part_get_device();
     dev->read(dev, PAYLOAD_OFFSET, (uint8_t *)PAYLOAD_ADDR, PAYLOAD_SIZE, 1);
     arch_clean_invalidate_cache_range(PAYLOAD_ADDR, PAYLOAD_SIZE);
