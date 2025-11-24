@@ -141,7 +141,7 @@ def switch_user(dev):
 
 def parse_gpt(dev):
     data = b''
-    for x in range(2, 13):
+    for x in range(2, 15):
         data += dev.emmc_read(x)
     num = len(data) // 0x80
     parts = dict()
