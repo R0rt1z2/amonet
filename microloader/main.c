@@ -1,7 +1,7 @@
-#include "../lk-payload/common.h"
+#include "../lk-payload/include/common.h"
 
 int main() {
-    // We need to clean the cache first, since we jumped straight to the payload
+    // we need to clean the cache first, since we jumped straight to the payload
     dprintf("microloader\n");
     arch_clean_invalidate_cache_range(MICROLOADER_SRC, MICROLOADER_SIZE);
 
@@ -13,6 +13,7 @@ int main() {
     void (*entry)() = (void (*)())(PAYLOAD_ADDR);
     entry();
 
+    // todo: verify if this is actually causing issues
     dprintf("something went wrong, halting\n");
     while (1) {
 

@@ -3,14 +3,14 @@ AS := arm-none-eabi-as
 LD := arm-none-eabi-gcc
 OBJCOPY := arm-none-eabi-objcopy
 
-CFLAGS := -std=gnu99 -Os -mthumb -mcpu=cortex-a9 -fno-builtin-printf -fno-strict-aliasing -fno-builtin-memcpy -mno-unaligned-access -DPRINTF_DISABLE_SUPPORT_FLOAT=1
-LDFLAGS := -T linker.x -nodefaultlibs -nostdlib
+CFLAGS := -std=gnu99 -Os -mthumb -mcpu=cortex-a9 -fno-builtin-printf -fno-strict-aliasing -fno-builtin-memcpy -mno-unaligned-access -I include
+LDFLAGS := -T linker.x -nodefaultlibs -nostdlib -lgcc
 
 BUILD_DIR := ./build
 
 TARGET := payload
 
-C_SRC = main.c libc.c
+C_SRC = main.c libc.c debug.c fastboot.c
 ASM_SRC = start.S
 
 OBJ = $(C_SRC:%.c=$(BUILD_DIR)/%.o) $(ASM_SRC:%.S=$(BUILD_DIR)/%.o)
