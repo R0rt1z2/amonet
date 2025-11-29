@@ -3,7 +3,7 @@
 #include <bootmode.h>
 #include <fastboot.h>
 
-uint8_t microloader[0x400];
+uint8_t microloader[MICROLOADER_SIZE];
 uint64_t g_boot, g_recovery, g_lk, g_misc;
 
 int (*original_read_ptr)(part_dev_t *dev, uint64_t block_off, void *dst, size_t sz, int part);
@@ -17,17 +17,18 @@ int read_func(part_dev_t *dev, uint64_t block_off, void *dst, size_t sz, int par
         printf("demangle %s image - from 0x%08X\n", 
                (block_off == g_boot * 0x200) ? "boot" : "recovery",
                __builtin_return_address(0));
-        if (sz < 0x400) {
-            ret = original_read_ptr(dev, block_off + 0x400, dst, sz, part);
+        if (sz < 0x1000) {
+            ret = original_read_ptr(dev, block_off + 0x1000, dst, sz, part);
         } else {
-            void *second_copy = (char*)dst + 0x400;
+            void *second_copy = (char*)dst + 0x1000;
             ret = original_read_ptr(dev, block_off, dst, sz, part);
-            memcpy(dst, second_copy, 0x400);
-            memset(second_copy, 0, 0x400);
+            memcpy(dst, second_copy, 0x1000);
+            memset(second_copy, 0, 0x1000);
         }
     } else {
         ret = original_read_ptr(dev, block_off, dst, sz, part);
     }
+
     return ret;
 }
 
@@ -87,7 +88,7 @@ int main() {
 
     // restore the portion of LK that was overwritten by the microloader
     // this is way more than we actually need to restore, but it shouldn't hurt
-    dev->read(dev, g_lk * 0x200 + 0x200, (char*)LK_BASE, 0x9A400, USER_PART); // +0x200 to skip lk header
+    dev->read(dev, g_lk * 0x200 + 0x200, (char*)LK_BASE, LK_SIZE, USER_PART); // +0x200 to skip lk header
 
     // make sure we found boot, recovery and lk partitions
     if (!g_boot || !g_recovery || !g_lk) {
@@ -201,6 +202,7 @@ int main() {
 
     // clean cache so our patches are visible
     arch_clean_invalidate_cache_range(LK_BASE, LK_SIZE);
+    __asm__ __volatile__("mcr p15, 0, r12, c7, c5, 0" ::: "r12");
 
     // re-execute mt_boot_init, and let LK continue from there
     app();

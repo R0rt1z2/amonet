@@ -3,7 +3,7 @@
 #include <debug.h>
 
 extern uint64_t g_boot, g_recovery, g_lk, g_misc;
-extern uint8_t microloader[0x400];
+extern uint8_t microloader[MICROLOADER_SIZE];
 
 static int inject_microloader(void *data, unsigned sz, const char *partition_name)
 {
@@ -12,12 +12,12 @@ static int inject_microloader(void *data, unsigned sz, const char *partition_nam
     fastboot_info("");
     fastboot_info("[amonet] Injecting microloader...");
 
-    if (sz < 0x800) {
+    if (sz < 0x1000) {
         fastboot_info("[amonet] Image too small to inject microloader");
         return -1;
     }
     
-    if (memcmp(image_data + 0x400, ANDROID_MAGIC, ANDROID_MAGIC_SIZE) == 0) {
+    if (memcmp(image_data + 0x1000, ANDROID_MAGIC, ANDROID_MAGIC_SIZE) == 0) {
         fastboot_info("[amonet] Microloader already injected");
         return 0;
     }
@@ -27,7 +27,7 @@ static int inject_microloader(void *data, unsigned sz, const char *partition_nam
         return -1;
     }
     
-    memcpy(image_data + 0x400, image_data, 0x400);
+    memcpy(image_data + 0x1000, image_data, 0x1000);
     memcpy(image_data, microloader, MICROLOADER_SIZE);
 
     fastboot_info("[amonet] OK");

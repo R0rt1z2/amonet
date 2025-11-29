@@ -84,17 +84,22 @@ def main(dev, args):
     # 4) Inject microloader
     log("Inject microloader")
     switch_user(dev)
-    boot_hdr1 = dev.emmc_read(gpt["boot"][0]) + dev.emmc_read(gpt["boot"][0] + 1)
-    boot_hdr2 = dev.emmc_read(gpt["boot"][0] + 2) + dev.emmc_read(gpt["boot"][0] + 3)
-    flash_binary(dev, "../bin/microloader.bin", gpt["boot"][0], 2 * 0x200)
-    if boot_hdr2[0:8] != b"ANDROID!":
-        flash_data(dev, boot_hdr1, gpt["boot"][0] + 2, 2 * 0x200)
-
-    recovery_hdr1 = dev.emmc_read(gpt["recovery"][0]) + dev.emmc_read(gpt["recovery"][0] + 1)
-    recovery_hdr2 = dev.emmc_read(gpt["recovery"][0] + 2) + dev.emmc_read(gpt["recovery"][0] + 3)
-    flash_binary(dev, "../bin/microloader.bin", gpt["recovery"][0], 2 * 0x200)
-    if recovery_hdr2[0:8] != b"ANDROID!":
-        flash_data(dev, recovery_hdr1, gpt["recovery"][0] + 2, 2 * 0x200)
+    
+    boot = b''
+    for i in range(8):
+        boot += dev.emmc_read(gpt["boot"][0] + i)
+    
+    if not (boot[0:8] == b'ANDROID!' and boot[0x1000:0x1008] == b'ANDROID!'):
+        flash_binary(dev, "../bin/microloader.bin", gpt["boot"][0], 8 * 0x200)
+        flash_data(dev, boot, gpt["boot"][0] + 8, 8 * 0x200)
+    
+    recovery = b''
+    for i in range(8):
+        recovery += dev.emmc_read(gpt["recovery"][0] + i)
+    
+    if not (recovery[0:8] == b'ANDROID!' and recovery[0x1000:0x1008] == b'ANDROID!'):
+        flash_binary(dev, "../bin/microloader.bin", gpt["recovery"][0], 8 * 0x200)
+        flash_data(dev, recovery, gpt["recovery"][0] + 8, 8 * 0x200)
 
     # 5) Wait some time so data is flushed to EMMC
     time.sleep(5)
