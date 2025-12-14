@@ -27,6 +27,8 @@ void (*fastboot_register)(const char *prefix,
                           void (*handle)(const char *arg, void *data, unsigned sz), 
                           unsigned char security_enabled) = (void *)(0x4bd268ec | 1);
 
+size_t (*video_printf)(const char *format, ...) = (void *)(0x4bd2a4d2|1);
+
 uint32_t* g_boot_mode = (uint32_t*) 0x4bd5d364; // LK boot mode
 uint32_t* i_boot_mode = (uint32_t*) 0x4bd6b1e4; // IDME boot mode
 

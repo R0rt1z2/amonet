@@ -221,6 +221,29 @@ void cmd_flash_wrapper(const char *arg, void *data, unsigned sz)
     cmd_flash(arg, data, sz);
 }
 
+static const char *fallback_reason = "unknown";
+
+static void cmd_oem_reason(const char *arg, void *data, unsigned sz)
+{
+    fastboot_info("");
+    fastboot_info("!! FALLBACK FASTBOOT MODE !!");
+    fastboot_info("");
+    fastboot_info("Your device has entered fallback fastboot mode.");
+    fastboot_info("This could be the consequence of a TERRIBLE");
+    fastboot_info("FAILURE during the boot process.");
+    fastboot_info("");
+    fastboot_info("Your device is NOT fully bricked, but any");
+    fastboot_info("further bad action could cause a PERMANENT");
+    fastboot_info("and IRREPARABLE brick!");
+    fastboot_info("");
+    fastboot_info("The reason for this fallback is:");
+    fastboot_info(fallback_reason);
+    fastboot_info("");
+    fastboot_info("CONTACT THE DEVELOPER IMMEDIATELY!");
+    fastboot_info("");
+    fastboot_okay("");
+}
+
 void prepare_fastboot()
 {
     uint16_t *patch;
@@ -241,6 +264,10 @@ void prepare_fastboot()
     fastboot_register("reboot", cmd_reboot_wrapper, 1);
     fastboot_register("oem reboot-recovery", cmd_reboot_wrapper, 1);
     fastboot_register("flash:", cmd_flash_wrapper, 1);
+    fastboot_register("oem reason", cmd_oem_reason, 0);
+
+    // Announce fallback reason
+    video_printf(" => FALLBACK FASTBOOT mode: (%s)\n", fallback_reason);
 }
 
 int main()
@@ -252,9 +279,6 @@ int main()
     printf("Ported to cronos by R0rt1z2. Copyright 2025\n");
     printf("Built on %s at %s\n", __DATE__, __TIME__);
 
-    printf("Reset MMSYS\n");
-    mmsys_reset();
-
     printf("Disable long press power off\n");
     pmic_config_interface(0x011A, 0x0, 0x1, 6);
 
@@ -263,6 +287,7 @@ int main()
         !is_key_pressed(KEY_PRIVACY))
     {
         printf("Volume down, entering fastboot...\n");
+        fallback_reason = "volume down pressed";
         goto fastboot;
     }
 
@@ -276,6 +301,7 @@ int main()
     // Use advanced meta mode as a fallback
     if (*o_boot_mode == 5) {
         printf("Advanced meta mode detected, entering fastboot...\n");
+        fallback_reason = "advanced meta mode";
         goto fastboot;
     }
 
@@ -300,6 +326,7 @@ int main()
             dev->write(dev, bootloader_msg, g_misc * 0x200, 0x10, USER_PART);
 
             printf("Fallback requested, entering fastboot...\n");
+            fallback_reason = "fallback requested via misc";
             goto fastboot;
         }
     }
@@ -311,6 +338,21 @@ int main()
     if (ret < 0)
     {
         printf("Failed to read original LK from storage\n");
+        fallback_reason = "failed to read LK from swdl";
+        goto fastboot;
+    }
+
+    if (((uint8_t *)lk_tmp)[0] != 0x07 ||
+        ((uint8_t *)lk_tmp)[1] != 0x00 ||
+        ((uint8_t *)lk_tmp)[2] != 0x00 ||
+        ((uint8_t *)lk_tmp)[3] != 0xea)
+    {
+        printf("Invalid LK image (%02x %02x %02x %02x)\n",
+               ((uint8_t *)lk_tmp)[0],
+               ((uint8_t *)lk_tmp)[1],
+               ((uint8_t *)lk_tmp)[2],
+               ((uint8_t *)lk_tmp)[3]);
+        fallback_reason = "invalid LK image from swdl";
         goto fastboot;
     }
 
@@ -325,58 +367,62 @@ int main()
     __asm__ __volatile__("mcr p15, 0, %0, c7, c5, 0" ::"r"(0) : "memory");
     __asm__ __volatile__("mcr p15, 0, %0, c7, c10, 4" ::"r"(0) : "memory");
 
+    printf("Reset MMSYS\n");
+    mmsys_reset();
+
     printf("About to jump to LK\n");
     asm volatile(
-        "cpsid if\n"
         "mov r4, %0\n"
         "mov r0, %0\n"
         "bx %1\n"
         : : "r"(arg), "r"(lk_dst) : "r0", "r4", "memory");
 
     printf("Failure\n");
+    fallback_reason = "jump to LK failed";
 
-fastboot:
-    // This is so original LK doesn't loop to our payload
-    unsigned char overwritten[80] = {
-        0xF5, 0x0A, 0xD0, 0x4B, 0x91, 0x0E, 0xD0, 0x4B, 0x01, 0x09, 0xD0, 0x4B, 0x41, 0x0B, 0xD0, 0x4B,
-        0xB1, 0x0C, 0xD0, 0x4B, 0x00, 0x84, 0xD5, 0x4B, 0x09, 0x0A, 0xD0, 0x4B, 0x79, 0x0A, 0xD0, 0x4B,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x49, 0x1B, 0xD0, 0x4B,
-        0x15, 0x1D, 0xD0, 0x4B, 0xC5, 0x1A, 0xD0, 0x4B, 0xB1, 0x1D, 0xD0, 0x4B, 0x35, 0x1A, 0xD0, 0x4B,
-        0x09, 0x1C, 0xD0, 0x4B, 0xC1, 0x19, 0xD0, 0x4B, 0x9D, 0x1C, 0xD0, 0x4B, 0x00, 0x00, 0x00, 0x00
-    };
-    memcpy((void *)0x4BD5C000, overwritten, sizeof(overwritten));
+fastboot: {
+        // This is so original LK doesn't loop to our payload
+        unsigned char overwritten[80] = {
+            0xF5, 0x0A, 0xD0, 0x4B, 0x91, 0x0E, 0xD0, 0x4B, 0x01, 0x09, 0xD0, 0x4B, 0x41, 0x0B, 0xD0, 0x4B,
+            0xB1, 0x0C, 0xD0, 0x4B, 0x00, 0x84, 0xD5, 0x4B, 0x09, 0x0A, 0xD0, 0x4B, 0x79, 0x0A, 0xD0, 0x4B,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x49, 0x1B, 0xD0, 0x4B,
+            0x15, 0x1D, 0xD0, 0x4B, 0xC5, 0x1A, 0xD0, 0x4B, 0xB1, 0x1D, 0xD0, 0x4B, 0x35, 0x1A, 0xD0, 0x4B,
+            0x09, 0x1C, 0xD0, 0x4B, 0xC1, 0x19, 0xD0, 0x4B, 0x9D, 0x1C, 0xD0, 0x4B, 0x00, 0x00, 0x00, 0x00
+        };
+        memcpy((void *)0x4BD5C000, overwritten, sizeof(overwritten));
 
-    uint16_t *patch;
-    uint32_t *patch32;
+        uint16_t *patch;
+        uint32_t *patch32;
 
-    printf("Enable interrupts\n");
-    asm volatile("cpsie if");
+        printf("Enable interrupts\n");
+        asm volatile("cpsie if");
 
-    printf("Force fastboot mode\n");
-    *g_boot_mode = 99;
+        printf("Force fastboot mode\n");
+        *g_boot_mode = 99;
 
-    // Enable all commands
-    patch = (void *)0x4bd0d854;
-    *patch++ = 0x2000; // movs r0, #0
-    *patch = 0x4770;   // bx lr
+        // Enable all commands
+        patch = (void *)0x4bd0d854;
+        *patch++ = 0x2000; // movs r0, #0
+        *patch = 0x4770;   // bx lr
 
-    // Device is unlocked
-    patch = (void *)0x4bd01ea0;
-    *patch++ = 0x2001; // movs r0, #1
-    *patch = 0x4770;   // bx lr
+        // Device is unlocked
+        patch = (void *)0x4bd01ea0;
+        *patch++ = 0x2001; // movs r0, #1
+        *patch = 0x4770;   // bx lr
 
-    // Make sure we don't trigger recovery mode
-    patch = (void *)0x4bd0da88;
-    *patch++ = 0x2000; // movs r0, #0
-    *patch = 0x4770;   // bx lr
+        // Make sure we don't trigger recovery mode
+        patch = (void *)0x4bd0da88;
+        *patch++ = 0x2000; // movs r0, #0
+        *patch = 0x4770;   // bx lr
 
-    // Register our custom fastboot commands
-    prepare_fastboot();
+        // Register our custom fastboot commands
+        prepare_fastboot();
 
-    printf("Jumping to fastboot\n");
-    int (*app)() = (void *)(0x4bd263e0 | 1);
-    app();
+        printf("Jumping to fastboot\n");
+        int (*app)() = (void *)(0x4bd263e0 | 1);
+        app();
 
-    printf("Fatal failure\n");
-    while (1) {}
+        printf("Fatal failure\n");
+        while (1) {}
+    }
 }
