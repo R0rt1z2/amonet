@@ -3,13 +3,13 @@ import struct
 
 base = 0x4BD00000
 
-# old         4bd50132 cf bd           pop        {r0,r1,r2,r3,r6,r7,pc}
-
 
 # 4bd4a5e6 cf bd           pop        {r0,r1,r2,r3,r6,r7,pc}
 pop_r0_r1_r2_r3_r6_r7_pc = 0x4bd14340|1
+
 # 4bd17f1e 00 bd           pop        {pc}
 pop_pc =  0x4bd17f1e|1
+
 # 4bd0174a 98 47           blx        r3
 blx_r3_pop_r3 = 0x4bd2514a|1
 

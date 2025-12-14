@@ -249,7 +249,7 @@ int main()
 
     printf("This is LK-payload by xyz. Copyright 2019\n");
     printf("Updated version by k4y0z. Copyright 2019\n");
-    printf("Ported to crown by R0rt1z2. Copyright 2025\n");
+    printf("Ported to cronos by R0rt1z2. Copyright 2025\n");
     printf("Built on %s at %s\n", __DATE__, __TIME__);
 
     printf("Reset MMSYS\n");

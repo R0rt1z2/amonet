@@ -3,7 +3,7 @@
 rm -rf dist
 
 mkdir -p dist/unlock/amonet/bin
-cp bin/{preloader.img,lk.bin,crown-kaeru.bin,tz.img,twrp.img,microloader.bin} dist/unlock/amonet/bin/
+cp bin/{preloader.img,lk.bin,cronos-kaeru.bin,tz.img,twrp.img,microloader.bin} dist/unlock/amonet/bin/
 
 mkdir -p dist/unlock/amonet/lk-payload/build
 cp lk-payload/build/payload.bin dist/unlock/amonet/lk-payload/build/
@@ -23,7 +23,7 @@ cp META-INF/com/google/android/{update-binary,updater-script} dist/unlock/META-I
 mkdir -p dist/gptfix/amonet/bin
 cp gpt-fix.sh dist/gptfix/amonet/
 chmod +x dist/gptfix/amonet/gpt-fix.sh
-cp bin/gpt-crown.bin dist/gptfix/amonet/bin/
+cp bin/gpt-cronos.bin dist/gptfix/amonet/bin/
 
 set +e
 cp bin/fastboot* dist/unlock/amonet/bin/ 2>/dev/null || true
