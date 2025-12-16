@@ -276,21 +276,6 @@ void prepare_fastboot()
     video_printf(" => FALLBACK FASTBOOT mode: (%s)\n", fallback_reason);
 }
 
-int is_volume_up_pressed(void) {
-    uint32_t reg_val = *(volatile uint32_t *)GPIO_DIN3;
-    return ((reg_val >> 4) & 1) == 0; // GPIO_ACTIVE_LOW, pin 36, bit 4
-}
-
-int is_volume_down_pressed(void) {
-    uint32_t reg_val = *(volatile uint32_t *)GPIO_DIN3;
-    return ((reg_val >> 5) & 1) == 0; // GPIO_ACTIVE_LOW, pin 37, bit 5
-}
-
-int is_privacy_pressed(void) {
-    uint32_t reg_val = *(volatile uint32_t *)GPIO_DIN3;
-    return ((reg_val >> 15) & 1) == 1; // GPIO_ACTIVE_HIGH, pin 47, bit 15
-}
-
 int main()
 {
     int ret;
@@ -305,15 +290,6 @@ int main()
 
     printf("Reset MMSYS\n");
     mmsys_reset();
-
-    if (is_volume_down_pressed() &&
-        !is_volume_up_pressed() &&
-        !is_privacy_pressed())
-    {
-        printf("Volume down, entering fastboot...\n");
-        fallback_reason = "volume down pressed";
-        goto fastboot;
-    }
 
     uint32_t **argptr = (void *)0x4BD00020;
     uint32_t *arg = *argptr;
