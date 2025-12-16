@@ -82,7 +82,7 @@ INSTALLER=$TMPDIR/install
 rm -rf $TMPDIR 2>/dev/null
 mkdir -p $INSTALLER 2>/dev/null
 
-unzip -o "$ZIP" 'amonet/bin/twrp.img' 'amonet/lk-payload/build/payload.bin' 'amonet/bin/microloader.bin' -d $INSTALLER >&2
+unzip -o "$ZIP" 'amonet/bin/twrp.img' 'amonet/lk-payload/build/payload.bin' 'amonet/bin/microloader.bin' 'amonet/bin/cronos-kaeru.bin' -d $INSTALLER >&2
 
 ##########################################################################################
 # Main
@@ -111,6 +111,7 @@ echo 0 > /sys/block/mmcblk0boot0/force_ro
 
 ui_print "- updating payload"
 dd if=/${INSTALLER}/amonet/lk-payload/build/payload.bin of=/dev/block/mmcblk0boot0 bs=512 seek=${PAYLOAD_BLOCK}
+dd if=${INSTALLER}/amonet/bin/cronos-kaeru.bin of=${PART_PREFIX}/by-name/swdl_real bs=512
 
 echo 1 > /sys/block/mmcblk0boot0/force_ro
 
