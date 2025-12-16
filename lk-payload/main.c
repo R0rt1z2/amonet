@@ -266,7 +266,13 @@ void prepare_fastboot()
     fastboot_register("flash:", cmd_flash_wrapper, 1);
     fastboot_register("oem reason", cmd_oem_reason, 0);
 
+    // Override the device codename
+    strncpy((char *)0x4bd4f9b0, "CRONOS", 7);
+    strncpy((char *)0x4bd4658e, "CRONOS", 7);
+
     // Announce fallback reason
+    fastboot_publish("fallback-reason", fallback_reason);
+    fastboot_publish("is-fallback", "1");
     video_printf(" => FALLBACK FASTBOOT mode: (%s)\n", fallback_reason);
 }
 
