@@ -11,8 +11,6 @@ struct device_t {
     size_t (*write)(struct device_t *dev, void *src, uint64_t block_off, size_t size, uint32_t part);
 };
 
-int (*is_key_pressed)(int key) = (void *)(0x4bd0f350|1);
-
 struct device_t* (*get_device)() = (void*)(0x4bd1dee8|1);
 void (*cache_clean)(void *addr, size_t sz) = (void*)0x4bd23f40;
 
@@ -42,13 +40,11 @@ uint32_t* i_boot_mode = (uint32_t*) 0x4bd6b1e4; // IDME boot mode
 #define MICROLOADER_SIZE 0x400
 #define MICROLOADER_BACKUP 0x44100000
 
+#define GPIO_DIN3 0x10005520
+
 #define LK_TEMP 0x44000000
 #define LK_BASE 0x4BD00000
 #define LK_SIZE (0x800 * 0x200)
-
-#define KEY_PRIVACY 0x2F
-#define KEY_VOLUP 0x25
-#define KEY_VOLDOWN 0x24
 
 #define BOOT0_PART 1
 #define USER_PART 8
