@@ -288,6 +288,9 @@ int main()
     printf("Disable long press power off\n");
     pmic_config_interface(0x011A, 0x0, 0x1, 6);
 
+    printf("Reset MMSYS\n");
+    mmsys_reset();
+
     if (is_key_pressed(KEY_VOLDOWN) &&
         !is_key_pressed(KEY_VOLUP) &&
         !is_key_pressed(KEY_PRIVACY))
@@ -372,9 +375,6 @@ int main()
     arch_clean_invalidate_cache_range((uintptr_t)lk_dst, LK_SIZE);
     __asm__ __volatile__("mcr p15, 0, %0, c7, c5, 0" ::"r"(0) : "memory");
     __asm__ __volatile__("mcr p15, 0, %0, c7, c10, 4" ::"r"(0) : "memory");
-
-    printf("Reset MMSYS\n");
-    mmsys_reset();
 
     printf("About to jump to LK\n");
     asm volatile(
