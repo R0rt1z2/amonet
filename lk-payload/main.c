@@ -28,6 +28,30 @@ uint32_t pmic_config_interface(uint32_t reg, uint32_t val, uint32_t mask, uint32
     return ((uint32_t (*)(uint32_t, uint32_t, uint32_t, uint32_t))(0x4bd137f8 | 1))(reg, val, mask, shift);
 }
 
+
+uint32_t pmic_read_interface(uint32_t reg, uint32_t* val, uint32_t mask, uint32_t shift) {
+    return ((uint32_t (*)(uint32_t, uint32_t*, uint32_t, uint32_t))(0x4bd137b8 | 1))(reg, val, mask,
+                                                                                     shift);
+}
+
+int is_privacy_pressed(void) {
+    uint32_t reg = 0;
+
+    pmic_read_interface(0x142, &reg, 1, 1);
+
+    return !reg;
+}
+
+int is_volume_up_pressed(void) {
+    uint32_t reg_val = *(volatile uint32_t *)GPIO_DIN3;
+    return ((reg_val >> 4) & 1) == 0; // GPIO_ACTIVE_LOW, pin 36, bit 4
+}
+
+int is_volume_down_pressed(void) {
+    uint32_t reg_val = *(volatile uint32_t *)GPIO_DIN3;
+    return ((reg_val >> 5) & 1) == 0; // GPIO_ACTIVE_LOW, pin 37, bit 5
+}
+
 void arch_clean_invalidate_cache_range(uintptr_t start, uintptr_t size)
 {
     uintptr_t end = start + size;
@@ -297,6 +321,14 @@ int main()
 
     printf("arg pointer: 0x%08x, arg value: 0x%08x\n", (uint32_t)arg, arg ? arg[0] : 0);
     printf("o_boot_mode pointer: 0x%08x, value: 0x%08x\n", (uint32_t)o_boot_mode, o_boot_mode ? *o_boot_mode : 0);
+
+    // Force fallback if volume down is pressed
+    if (!is_privacy_pressed() && !is_volume_up_pressed()
+        && is_volume_down_pressed()) {
+        printf("Volume down pressed, entering fastboot...\n");
+        fallback_reason = "volume down button held";
+        goto fastboot;
+    }
 
     // Use advanced meta mode as a fallback
     if (*o_boot_mode == 5) {
