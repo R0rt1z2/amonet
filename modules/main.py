@@ -178,11 +178,11 @@ def main():
     log("Inject payload")
     switch_user(dev)
     flash_binary(dev, "../bin/boot.hdr", gpt["boot_a"][0], gpt["boot_a"][1] * 0x200)
-    flash_binary(dev, "../bin/boot.payload", gpt["boot_a"][0] + 223215, (gpt["boot_a"][1] * 0x200) - (223215 * 0x200))
+    flash_binary(dev, "../bin/boot.payload", gpt["boot_a"][0] + 223207, (gpt["boot_a"][1] * 0x200) - (223207 * 0x200))
 
     switch_user(dev)
     flash_binary(dev, "../bin/boot.hdr", gpt["boot_b"][0], gpt["boot_b"][1] * 0x200)
-    flash_binary(dev, "../bin/boot.payload", gpt["boot_b"][0] + 223215, (gpt["boot_b"][1] * 0x200) - (223215 * 0x200))
+    flash_binary(dev, "../bin/boot.payload", gpt["boot_b"][0] + 223207, (gpt["boot_b"][1] * 0x200) - (223207 * 0x200))
 
     log("Force fastboot")
     force_fastboot(dev, gpt)
