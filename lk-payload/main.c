@@ -144,6 +144,19 @@ static void parse_gpt() {
     }
 }
 
+static bool read_bcb(struct device_t *dev, struct bcb *data) {
+    if (!g_misc)
+        return false;
+
+    size_t sz = sizeof(struct bcb);
+    if (dev->read(dev, (g_misc * 0x200) + BCB_OFFSET, data, sz, USER_PART) != sz) {
+        printf("Failed to read BCB\n");
+        return false;
+    }
+
+    return true;
+}
+
 static int flash_payload(void *data, unsigned sz)
 {
     struct device_t *dev = get_device();
@@ -301,6 +314,9 @@ int main() {
     memcpy((void*)0x4BD003C0, overwritten, sizeof(overwritten));
 
     struct device_t *dev = get_device();
+
+    struct bcb bcb_data;
+    read_bcb(dev, &bcb_data);
 
     // If action button is pressed, go to fastboot
     if (mtk_detect_key(KEY_UBER)) {
