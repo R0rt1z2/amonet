@@ -2,8 +2,10 @@ CC := arm-none-eabi-gcc
 LD := arm-none-eabi-gcc
 OBJCOPY := arm-none-eabi-objcopy
 
+PAYLOAD_BLOCK := 223207
+
 CFLAGS := -std=gnu99 -Os -mthumb -mcpu=cortex-a9 -fno-builtin-printf -fno-strict-aliasing -fno-builtin-memcpy -mno-unaligned-access -DPRINTF_DISABLE_SUPPORT_FLOAT=1
-CFLAGS += -I. -I./bcbtool/include
+CFLAGS += -I. -I./bcbtool/include -DPAYLOAD_BLOCK=$(PAYLOAD_BLOCK)
 LDFLAGS := -T linker.x -nodefaultlibs -nostdlib
 
 BUILD_DIR := ./build

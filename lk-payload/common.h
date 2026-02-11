@@ -41,8 +41,6 @@ void (*cmd_flash)(const char *arg, void *data, unsigned sz) = (void *)(0x4bd36d6
 uint32_t* g_boot_mode = (uint32_t*) 0x4BD5C2AC; // LK boot mode
 uint32_t* o_boot_mode = (uint32_t*) 0x4BE5E20C; // argptr boot mode
 
-#define PAYLOAD_BLOCK 223215
-
 #define KEY_UBER 0
 
 #define LK_SIZE (0x800 * 0x200)
