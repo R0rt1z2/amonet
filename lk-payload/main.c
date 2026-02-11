@@ -128,13 +128,52 @@ static void parse_gpt() {
     }
 }
 
+static void print_bcb(struct bcb *data)
+{
+	int active_slot = bcblib_bcb_get_active_slot(data, false, false);
+	printf("BCB [Magic: %.3s | Ver: %d]\n", data->magic, data->version);
+	printf("Slot A: prio=%-2d tries=%-1d success=%d\n", 
+		   data->slot[0].priority, data->slot[0].tries, data->slot[0].success);
+	printf("Slot B: prio=%-2d tries=%-1d success=%d\n", 
+		   data->slot[1].priority, data->slot[1].tries, data->slot[1].success);
+	if (active_slot >= 0)
+		printf("Active slot: %c\n", 'a' + active_slot);
+	else
+		printf("Active slot: NONE; WILL FAIL TO BOOT!\n");
+}
+
 static bool read_bcb(struct device_t *dev, struct bcb *data) {
     if (!g_misc)
         return false;
 
-    size_t sz = sizeof(struct bcb);
-    if (dev->read(dev, (g_misc * 0x200) + BCB_OFFSET, data, sz, USER_PART) != sz) {
+    uint32_t sector = (g_misc * 0x200) + (BCB_OFFSET & ~0x1FF);
+    uint32_t offset = BCB_OFFSET & 0x1FF;
+    uint8_t buf[0x200];
+
+    if (dev->read(dev, sector, buf, sizeof(buf), USER_PART) != sizeof(buf)) {
         printf("Failed to read BCB\n");
+        return false;
+    }
+
+    memcpy(data, buf + offset, sizeof(struct bcb));
+    return true;
+}
+
+static bool write_bcb(struct device_t *dev, struct bcb *data) {
+    if (!g_misc)
+        return false;
+
+    uint32_t sector = (g_misc * 0x200) + (BCB_OFFSET & ~0x1FF);
+    uint32_t offset = BCB_OFFSET & 0x1FF;
+    uint8_t buf[0x200];
+
+    if (dev->read(dev, sector, buf, sizeof(buf), USER_PART) != sizeof(buf))
+        return false;
+
+    memcpy(buf + offset, data, sizeof(struct bcb));
+
+    if (dev->write(dev, buf, sector, sizeof(buf), USER_PART) != sizeof(buf)) {
+        printf("Failed to write BCB\n");
         return false;
     }
 
@@ -300,7 +339,37 @@ int main() {
     struct device_t *dev = get_device();
 
     struct bcb bcb_data;
-    read_bcb(dev, &bcb_data);
+    if (read_bcb(dev, &bcb_data)) {
+        bool dirty = false;
+
+        if (!bcblib_bcb_magic_valid(&bcb_data)) {
+            bcblib_bcb_init(&bcb_data);
+            dirty = true;
+        } else {
+            print_bcb(&bcb_data);
+        }
+
+        // If both slots are marked as failed, we'll probably brick.
+        // To prevent that, we basically set success to whatever the
+        // current slot is (in this case, the one with highest prio).
+        if (!bcblib_metadata_get_success(&bcb_data.slot[0]) &&
+            !bcblib_metadata_get_success(&bcb_data.slot[1])) {
+            int current = bcblib_bcb_get_active_slot(&bcb_data, false, false);
+
+            // Unlikely to happen since we called bcblib_bcb_init()?
+            if (current < 0)
+                current = 0;
+
+            bcblib_metadata_set_success(&bcb_data.slot[current], true);
+            dirty = true;
+        }
+
+        if (dirty) {
+            printf("Saved you from bricking your device\n");
+            write_bcb(dev, &bcb_data);
+            print_bcb(&bcb_data);
+        }
+    }
 
     // If action button is pressed, go to fastboot
     if (mtk_detect_key(KEY_UBER)) {
