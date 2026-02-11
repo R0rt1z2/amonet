@@ -32,6 +32,7 @@ void (*fastboot_info)(const char *reason) = (void *)(0x4bd34814 | 1);
 void (*fastboot_fail)(const char *reason) = (void *)(0x4bd3485c | 1);
 void (*fastboot_okay)(const char *reason) = (void *)(0x4bd34a20 | 1);
 
+void (*fastboot_publish)(const char* name, const char* value) = (void *)(0x4bd34678 | 1);
 void (*fastboot_register)(const char *prefix, 
                           void (*handle)(const char *arg, void *data, unsigned sz), 
                           unsigned char security_enabled) = (void *)(0x4bd345e4 | 1);

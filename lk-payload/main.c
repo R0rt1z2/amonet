@@ -286,6 +286,41 @@ void cmd_reboot_bootloader(const char *arg, void *data, unsigned sz) {
     }
 }
 
+void cmd_set_active(const char *arg, void *data, unsigned sz) {
+    const char *slot = arg + 1;
+
+    if (*slot != 'a' && *slot != 'b') {
+        fastboot_fail("Invalid slot. Use 'a' or 'b'");
+        return;
+    }
+
+    struct device_t *dev = get_device();
+    struct bcb bcb_data;
+
+    if (!read_bcb(dev, &bcb_data)) {
+        fastboot_fail("Failed to read BCB");
+        return;
+    }
+
+    if (!bcblib_bcb_magic_valid(&bcb_data))
+        bcblib_bcb_init(&bcb_data);
+
+    int idx = *slot - 'a';
+    bcb_data.slot[idx] = BCB_SLOT_METADATA_ACTIVE;
+    bcb_data.slot[1 - idx] = BCB_SLOT_METADATA_EMPTY;
+
+    if (!write_bcb(dev, &bcb_data)) {
+        fastboot_fail("Failed to write BCB");
+        return;
+    }
+
+    char msg[32];
+    npf_snprintf(msg, sizeof(msg), "Active slot set to: %c", *slot);
+    fastboot_okay("");
+    fastboot_info(msg);
+    fastboot_okay("");
+}
+
 void prepare_fastboot() {
     uint16_t *patch;
 
@@ -309,7 +344,13 @@ void prepare_fastboot() {
 
     // Add reboot recovery command
     fastboot_register("oem reboot-recovery", cmd_reboot_recovery, 1);
+
+    // This is so we can easily switch slots
+    fastboot_publish("slot-count", "2");
+    fastboot_register("set_active", cmd_set_active, 1);
 }
+
+static char current_slot[2] = "a";
 
 int main() {
     int ret = 0, fastboot = 0;
@@ -369,7 +410,13 @@ int main() {
             write_bcb(dev, &bcb_data);
             print_bcb(&bcb_data);
         }
+
+        int active = bcblib_bcb_get_active_slot(&bcb_data, false, false);
+        if (active >= 0)
+            current_slot[0] = 'a' + active;
     }
+
+    fastboot_publish("current-slot", current_slot);
 
     // If action button is pressed, go to fastboot
     if (mtk_detect_key(KEY_UBER)) {
