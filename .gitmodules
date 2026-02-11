@@ -1,3 +1,6 @@
 [submodule "lk-payload/bcbtool"]
 	path = lk-payload/bcbtool
 	url = https://github.com/bengris32/bcbtool.git
+[submodule "lk-payload/libaeabi-cortexm0"]
+	path = lk-payload/libaeabi-cortexm0
+	url = https://github.com/bobbl/libaeabi-cortexm0.git

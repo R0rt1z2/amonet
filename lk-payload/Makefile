@@ -1,5 +1,4 @@
 CC := arm-none-eabi-gcc
-AS := arm-none-eabi-as
 LD := arm-none-eabi-gcc
 OBJCOPY := arm-none-eabi-objcopy
 
@@ -13,6 +12,7 @@ TARGET := payload
 
 C_SRC = main.c libc.c bcbtool/lib/bcblib.c
 ASM_SRC = start.S
+ASM_SRC += $(wildcard libaeabi-cortexm0/*.S)
 
 OBJ = $(C_SRC:%.c=$(BUILD_DIR)/%.o) $(ASM_SRC:%.S=$(BUILD_DIR)/%.o)
 DEP = $(OBJ:%.o=%.d)
@@ -29,9 +29,13 @@ $(BUILD_DIR)/%.o: %.c
 	mkdir -p $(@D)
 	$(CC) -MMD -c -o $@ $< $(CFLAGS)
 
+$(BUILD_DIR)/libaeabi-cortexm0/%.o: libaeabi-cortexm0/%.S
+	mkdir -p $(@D)
+	sed 's/\.cpu cortex-m0//' $< | $(CC) -c -o $@ -x assembler-with-cpp - $(CFLAGS)
+
 $(BUILD_DIR)/%.o: %.S
 	mkdir -p $(@D)
-	$(AS) -o $@ $<
+	$(CC) -c -o $@ $< $(CFLAGS)
 
 clean:
 	-rm -rf $(BUILD_DIR)
