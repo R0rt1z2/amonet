@@ -10,7 +10,7 @@ BUILD_DIR := ./build
 
 TARGET := payload
 
-C_SRC = main.c libc.c bcbtool/lib/bcblib.c
+C_SRC = main.c debug.c libc.c bcbtool/lib/bcblib.c
 ASM_SRC = start.S
 ASM_SRC += $(wildcard libaeabi-cortexm0/*.S)
 

@@ -16,8 +16,6 @@ typedef u8_t u8;
 typedef unsigned size_t;
 
 size_t strlen(const char *str);
-int printf(const char *format, ...);
-int sprintf (char *str, const char *format, ...);
 char *strcpy(char *to, const char *from);
 int strncmp(const char *s1, const char *s2, u32_t n);
 void*  memset(void*  dst, int c, u32_t n);

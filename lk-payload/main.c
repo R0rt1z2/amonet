@@ -1,24 +1,8 @@
 #include "libc.h"
+#include "debug.h"
 #include "common.h"
 
 #include <bcbtool/lib/bcblib.h>
-
-void low_uart_put(int ch) {
-    volatile uint32_t *uart_reg0 = (volatile uint32_t*)0x11002014;
-    volatile uint32_t *uart_reg1 = (volatile uint32_t*)0x11002000;
-
-    while ( !((*uart_reg0) & 0x20) )
-    {}
-
-    *uart_reg1 = ch;
-}
-
-void _putchar(char character)
-{
-    if (character == '\n')
-        low_uart_put('\r');
-    low_uart_put(character);
-}
 
 int (*original_read)(struct device_t *dev, uint64_t block_off, void *dst, size_t sz, int part) = (void*)0x4BD2AE2D;
 int (*app)() = (void*)0x4BD341D5;
