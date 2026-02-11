@@ -1,0 +1,3 @@
+[submodule "lk-payload/bcbtool"]
+	path = lk-payload/bcbtool
+	url = https://github.com/bengris32/bcbtool.git

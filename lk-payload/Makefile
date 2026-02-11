@@ -4,13 +4,14 @@ LD := arm-none-eabi-gcc
 OBJCOPY := arm-none-eabi-objcopy
 
 CFLAGS := -std=gnu99 -Os -mthumb -mcpu=cortex-a9 -fno-builtin-printf -fno-strict-aliasing -fno-builtin-memcpy -mno-unaligned-access -DPRINTF_DISABLE_SUPPORT_FLOAT=1
+CFLAGS += -I. -I./bcbtool/include
 LDFLAGS := -T linker.x -nodefaultlibs -nostdlib
 
 BUILD_DIR := ./build
 
 TARGET := payload
 
-C_SRC = main.c libc.c
+C_SRC = main.c libc.c bcbtool/lib/bcblib.c
 ASM_SRC = start.S
 
 OBJ = $(C_SRC:%.c=$(BUILD_DIR)/%.o) $(ASM_SRC:%.S=$(BUILD_DIR)/%.o)

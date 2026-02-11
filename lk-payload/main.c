@@ -1,6 +1,8 @@
 #include "libc.h"
 #include "common.h"
 
+#include <bcbtool/lib/bcblib.h>
+
 void low_uart_put(int ch) {
     volatile uint32_t *uart_reg0 = (volatile uint32_t*)0x11002014;
     volatile uint32_t *uart_reg1 = (volatile uint32_t*)0x11002000;
