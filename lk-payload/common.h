@@ -23,6 +23,7 @@ void (*mdelay)(int) = (void*)(0x4BD21B58 | 1);
 int (*thread_resume)(thread_t*) = (void*)(0x4BD31FCC | 1);
 thread_t* (*thread_create)(const char*, void*, void*, int, size_t) = (void*)(0x4BD31E2C | 1);
 void (*thread_sleep)(int) = (void*)(0x4BD32170 | 1);
+void (*thread_exit)(int) = (void*)(0x4BD31EEC | 1);
 
 void (*led_update)(int, uint8_t*) = (void*)(0x4BD329A0 | 1);
 int (*led_write)(int, int) = (void*)(0x4BD3295C | 1);

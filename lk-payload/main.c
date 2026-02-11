@@ -250,7 +250,7 @@ void cmd_reboot_bootloader(const char *arg, void *data, unsigned sz) {
 
 void prepare_fastboot() {
     uint16_t *patch;
-  
+
     // Disable built-in flash command
     patch = (void*)0x4BD34B68;
     *patch++ = 0x46C0; // nop
@@ -410,5 +410,7 @@ int main() {
 
     app();
 
-    while (1) {}
+    // Kill the thread we were spawned in, otherwise we'd waste CPU cycles
+    // spinning here and as a consequence have bad USB speeds in fastboot
+    thread_exit(0);
 }
