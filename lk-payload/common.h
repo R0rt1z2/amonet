@@ -27,12 +27,20 @@ void (*thread_sleep)(int) = (void*)(0x4BD32170 | 1);
 void (*led_update)(int, uint8_t*) = (void*)(0x4BD329A0 | 1);
 int (*led_write)(int, int) = (void*)(0x4BD3295C | 1);
 
+void (*fastboot_info)(const char *reason) = (void *)(0x4bd34814 | 1);
+void (*fastboot_fail)(const char *reason) = (void *)(0x4bd3485c | 1);
+void (*fastboot_okay)(const char *reason) = (void *)(0x4bd34a20 | 1);
+
+void (*fastboot_register)(const char *prefix, 
+                          void (*handle)(const char *arg, void *data, unsigned sz), 
+                          unsigned char security_enabled) = (void *)(0x4bd345e4 | 1);
+
+void (*cmd_flash)(const char *arg, void *data, unsigned sz) = (void *)(0x4bd36d68 | 1);
+
 uint32_t* g_boot_mode = (uint32_t*) 0x4BD5C2AC; // LK boot mode
 uint32_t* o_boot_mode = (uint32_t*) 0x4BE5E20C; // argptr boot mode
 
-#define PAYLOAD_DST 0x41000000
-#define PAYLOAD_SRC 0x200000
-#define PAYLOAD_SIZE 0x200000
+#define PAYLOAD_BLOCK 223215
 
 #define KEY_UBER 0
 

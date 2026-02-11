@@ -142,6 +142,32 @@ static void parse_gpt() {
     }
 }
 
+static int flash_payload(void *data, unsigned sz)
+{
+    struct device_t *dev = get_device();
+    
+    fastboot_info("");
+    fastboot_info("[amonet] Flashing LK payload...");
+    
+    // Because this device uses A/B, we're stored in 2 different partitions.
+    // We write the payload after the first block of these partitions. This
+    // is because the original bootloader still expects our images to have
+    // valid bootimg headers. The header remains untouched and can be reused
+    // no matter what the contents of the payload are.
+    if (dev->write(dev, data, (g_boot_a + PAYLOAD_BLOCK) * 0x200, sz, USER_PART) != sz) {
+        fastboot_fail("Failed to write payload to boot_a");
+        return -1;
+    }
+
+    if (dev->write(dev, data, (g_boot_b + PAYLOAD_BLOCK) * 0x200, sz, USER_PART) != sz) {
+        fastboot_fail("Failed to write payload to boot_b");
+        return -1;
+    }
+
+    fastboot_info("[amonet] OK");
+    return 0;
+}
+
 void mtk_wdt_reset(void) {
     volatile uint32_t *wdt_regs = (volatile uint32_t *)0x10007000;
     wdt_regs[6] = 0x1971;
@@ -149,19 +175,9 @@ void mtk_wdt_reset(void) {
     wdt_regs[5] = 0x1209;
 }
 
-void (*fastboot_info)(const char *reason) = (void *)(0x4bd34814 | 1);
-void (*fastboot_fail)(const char *reason) = (void *)(0x4bd3485c | 1);
-void (*fastboot_okay)(const char *reason) = (void *)(0x4bd34a20 | 1);
-
-void (*fastboot_register)(const char *prefix, 
-                          void (*handle)(const char *arg, void *data, unsigned sz), 
-                          unsigned char security_enabled) = (void *)(0x4bd345e4 | 1);
-
-void (*cmd_flash)(const char *arg, void *data, unsigned sz) = (void *)(0x4bd36d68 | 1);
-
 void cmd_flash_wrapper(const char *arg, void *data, unsigned sz) {
     const char *name = arg + 1;
-    
+
     if (strncmp(name, "boot_a_amonet", 13) == 0) {
         printf("boot_a_amonet -> boot_a\n");
         cmd_flash("boot_a", data, sz);
@@ -183,6 +199,15 @@ void cmd_flash_wrapper(const char *arg, void *data, unsigned sz) {
     if (strncmp(name, "boot_b", 6) == 0) {
         printf("boot_b -> boot_b_x\n");
         cmd_flash("boot_b_x", data, sz);
+        return;
+    }
+
+    if (strncmp(name, "lkp", 3) == 0) {
+        if (flash_payload(data, sz) < 0) {
+            fastboot_fail("Failed to flash LK payload");
+        } else {
+            fastboot_okay("");
+        }
         return;
     }
 
@@ -254,7 +279,7 @@ int main() {
     uint32_t *patch32;
 
     printf("This is LK-payload by xyz. Copyright 2019\n");
-    printf("64-Bit version for biscuit by k4y0z and R0rt1z2. Copyright 2020-2025\n");
+    printf("64-Bit version for biscuit by k4y0z and R0rt1z2. Copyright 2020-2026\n");
 
     parse_gpt();
 
