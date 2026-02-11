@@ -163,18 +163,7 @@ def main():
         raise RuntimeError("downgrade failure, giving up")
     log("rpmb downgrade ok")
 
-    # 6) Downgrade tz
-    log("Flash tz")
-    switch_user(dev)
-    flash_binary(dev, "../bin/tz.img", gpt["tee1"][0], gpt["tee1"][1] * 0x200)
-
-    # 7) Downgrade lk
-    log("Flash lk")
-    switch_user(dev)
-    flash_binary(dev, "../bin/lk.bin", gpt["lk_a"][0], gpt["lk_a"][1] * 0x200)
-    flash_binary(dev, "../bin/lk.bin", gpt["lk_b"][0], gpt["lk_b"][1] * 0x200)
-
-    # 8) Flash microloader
+    # 6) Flash microloader
     log("Inject payload")
     switch_user(dev)
     flash_binary(dev, "../bin/boot.hdr", gpt["boot_a"][0], gpt["boot_a"][1] * 0x200)
@@ -183,6 +172,21 @@ def main():
     switch_user(dev)
     flash_binary(dev, "../bin/boot.hdr", gpt["boot_b"][0], gpt["boot_b"][1] * 0x200)
     flash_binary(dev, "../bin/boot.payload", gpt["boot_b"][0] + 223207, (gpt["boot_b"][1] * 0x200) - (223207 * 0x200))
+
+    if len(sys.argv) == 2 and sys.argv[1] == "payload":
+        log("Reboot")
+        return dev.reboot()
+
+    # 7) Downgrade tz
+    log("Flash tz")
+    switch_user(dev)
+    flash_binary(dev, "../bin/tz.img", gpt["tee1"][0], gpt["tee1"][1] * 0x200)
+
+    # 8) Downgrade lk
+    log("Flash lk")
+    switch_user(dev)
+    flash_binary(dev, "../bin/lk.bin", gpt["lk_a"][0], gpt["lk_a"][1] * 0x200)
+    flash_binary(dev, "../bin/lk.bin", gpt["lk_b"][0], gpt["lk_b"][1] * 0x200)
 
     log("Force fastboot")
     force_fastboot(dev, gpt)
