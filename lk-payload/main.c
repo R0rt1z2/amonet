@@ -1,6 +1,7 @@
 #include "libc.h"
 #include "debug.h"
 #include "common.h"
+#include "bootimg.h"
 
 #include <bcbtool/lib/bcblib.h>
 
@@ -86,6 +87,25 @@ int read_func(struct device_t *dev, uint64_t block_off, void *dst, size_t sz, in
       }
     }
     return original_read(dev, block_off, dst, sz, part);
+}
+
+int is_64bit_kernel(uint8_t * bootopt_str)
+{
+    int i = 0;
+    
+    for (; i < (BOOT_ARGS_SIZE-0x16); i++) {
+        if (0 == strncmp(&bootopt_str[i], "bootopt=", sizeof("bootopt=")-1)) {
+            if (0 == strncmp(&bootopt_str[i+0x12], "64", sizeof("64")-1)) {
+                return 1;
+            }
+            if (0 == strncmp(&bootopt_str[i+0x12], "32", sizeof("32")-1)) {
+                return 0;
+            }
+        }
+    }
+    
+    printf("Warning! No bootopt info found!\n");
+    return 0;
 }
 
 static void parse_gpt() {
@@ -495,6 +515,24 @@ int main() {
         printf("well since you're asking so nicely...\n");
         *g_boot_mode = 99;
         prepare_fastboot();
+    } else {
+        // This is so we can boot both 64 & 32 bit kernels
+        uint8_t dst[0x800] = {0};
+        uint64_t g_boot = (current_slot[0] == 'a') ? g_boot_a_x : g_boot_b_x;
+        dev->read(dev, (boot_recovery ? g_recovery : g_boot) * 0x200, dst, sizeof(dst), USER_PART);
+
+        boot_img_hdr *hdr = (boot_img_hdr *)dst;
+        if (memcmp(hdr->magic, BOOT_MAGIC, BOOT_MAGIC_SIZE) == 0) {
+            if (is_64bit_kernel(hdr->cmdline)) {
+                printf("64-bit kernel detected, forcing 64-bit mode\n");
+                uint32_t *patch32 = (void *)0x4BD641F4;
+                *patch32 = 1;
+            } else { // .. assume 32 bits
+                printf("32-bit kernel detected, forcing 32-bit mode\n");
+                uint32_t *patch32 = (void *)0x4BD641F4;
+                *patch32 = 0;
+            }
+        }
     }
 
     // The device is unlocked
@@ -514,10 +552,6 @@ int main() {
 
     patch32 = (void*)&dev->read;
     *patch32 = (uint32_t)read_func;
-
-    // Force 64-bit kernel
-    patch32 = (void*)0x4BD641F4;
-    *patch32 = 1;
 
     // Accomodate the max download size
     patch32 = (void*)0x4BD34CE0;
