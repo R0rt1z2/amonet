@@ -44,7 +44,7 @@ void* led_animation_thread(void* arg) {
 }
 
 void create_led_thread() {
-  thread_t* led_thread = thread_create("rainbow", led_animation_thread, NULL, 10, 4096);
+  thread_t* led_thread = thread_create("rainbow", led_animation_thread, NULL, 1, 4096);
   if (led_thread) {
     thread_resume(led_thread);
   }
