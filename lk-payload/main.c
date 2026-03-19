@@ -203,23 +203,62 @@ static bool write_bcb(struct device_t *dev, struct bcb *data) {
 static int flash_payload(void *data, unsigned sz)
 {
     struct device_t *dev = get_device();
-    
+
     fastboot_info("");
     fastboot_info("[amonet] Flashing LK payload...");
-    
-    // Because this device uses A/B, we're stored in 2 different partitions.
-    // We write the payload after the first block of these partitions. This
-    // is because the original bootloader still expects our images to have
-    // valid bootimg headers. The header remains untouched and can be reused
-    // no matter what the contents of the payload are.
-    if (dev->write(dev, data, (g_boot_a + PAYLOAD_BLOCK) * 0x200, sz, USER_PART) != sz) {
-        fastboot_fail("Failed to write payload to boot_a");
-        return -1;
-    }
 
-    if (dev->write(dev, data, (g_boot_b + PAYLOAD_BLOCK) * 0x200, sz, USER_PART) != sz) {
-        fastboot_fail("Failed to write payload to boot_b");
-        return -1;
+    if (((uint8_t *)data)[0] == 0x00) {
+        size_t aligned = (sz + 0x1FF) & ~0x1FF;
+        if (aligned > sz)
+            memset((uint8_t *)data + sz, 0, aligned - sz);
+
+        for (int slot = 0; slot < 2; slot++) {
+            uint64_t base = ((slot == 0 ? g_boot_a : g_boot_b) + PAYLOAD_BLOCK) * 0x200;
+            if (dev->write(dev, data, base, aligned, USER_PART) != aligned) {
+                fastboot_fail("Failed to write boot.payload");
+                return -1;
+            }
+        }
+    } else {
+        uint8_t prefix[0x400];
+
+        if (sz > 0x3000) {
+            fastboot_fail("Payload too large");
+            return -1;
+        }
+
+        for (int slot = 0; slot < 2; slot++) {
+            uint64_t base = ((slot == 0 ? g_boot_a : g_boot_b) + PAYLOAD_BLOCK) * 0x200;
+
+            if (dev->read(dev, base, prefix, sizeof(prefix), USER_PART) != sizeof(prefix)) {
+                fastboot_fail("Failed to read boot.payload header");
+                return -1;
+            }
+
+            size_t first_chunk = sizeof(prefix) - 0x240;
+            if (first_chunk > sz)
+                first_chunk = sz;
+            memcpy(prefix + 0x240, data, first_chunk);
+
+            if (dev->write(dev, prefix, base, sizeof(prefix), USER_PART) != sizeof(prefix)) {
+                fastboot_fail("Failed to write boot.payload header");
+                return -1;
+            }
+
+            if (sz > first_chunk) {
+                uint8_t *rest = (uint8_t *)data + first_chunk;
+                size_t rest_sz = sz - first_chunk;
+                size_t aligned = (rest_sz + 0x1FF) & ~0x1FF;
+
+                if (aligned > rest_sz)
+                    memset(rest + rest_sz, 0, aligned - rest_sz);
+
+                if (dev->write(dev, rest, base + sizeof(prefix), aligned, USER_PART) != aligned) {
+                    fastboot_fail("Failed to write payload body");
+                    return -1;
+                }
+            }
+        }
     }
 
     fastboot_info("[amonet] OK");
