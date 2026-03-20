@@ -407,6 +407,9 @@ void prepare_fastboot() {
     // This is so we can easily switch slots
     fastboot_publish("slot-count", "2");
     fastboot_register("set_active", cmd_set_active, 1);
+
+    // This is so we can easily identify the amonet version
+    fastboot_publish("amonet-version", AMONET_VERSION);
 }
 
 static char current_slot[2] = "a";
@@ -418,6 +421,7 @@ int main() {
 
     printf("This is LK-payload by xyz. Copyright 2019\n");
     printf("64-Bit version for biscuit by k4y0z and R0rt1z2. Copyright 2020-2026\n");
+    printf("Version: %s, built on %s at %s\n", AMONET_VERSION, __DATE__, __TIME__);
 
     parse_gpt();
 
