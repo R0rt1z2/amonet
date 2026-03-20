@@ -112,7 +112,7 @@ fix_symlinks() {
     [ -z "$SIZE_P" ] && continue
     [ "$SIZE_P" -lt "$SIZE_MIN" ] && continue
     [ "$SIZE_P" -gt "$SIZE_MAX" ] && continue
-    if grep -qal "This is LK-payload by xyz." "$part" 2>/dev/null; then
+    if tail -c 10485760 "$part" 2>/dev/null | grep -qa "This is LK-payload by xyz."; then
       REAL_B="$part"
       break
     fi
