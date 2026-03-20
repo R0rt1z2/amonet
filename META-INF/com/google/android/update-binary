@@ -1,0 +1,151 @@
+#!/sbin/sh -x
+# amonet updater for biscuit (Amazon Echo Dot 2nd Gen)
+# Copyright (C) 2020-2026 k4y0z and R0rt1z2
+
+PAYLOAD_BLOCK=223207
+BYNAME=/dev/block/platform/mtk-msdc.0/by-name
+
+getprop | grep zygote | grep -q running && bootMode=true || bootMode=false
+
+umask 022
+
+ui_print() {
+  $bootMode && echo -e "$1" || echo -e "ui_print $1\nui_print" >> /proc/self/fd/$outFD
+}
+
+if $bootMode; then
+  ui_print " "
+  ui_print "(!) Boot mode install is not supported"
+  ui_print "- Install from recovery mode"
+  ui_print " "
+  exit 1
+fi
+
+grep_prop() {
+  REGEX="s/^$1=//p"
+  shift
+  FILES=$@
+  [ -z "$FILES" ] && FILES='/default.prop'
+  sed -n "$REGEX" $FILES 2>/dev/null | head -n 1
+}
+
+check_product() {
+  product=$(grep_prop ro.build.product)
+  if [ "$product" != "${1}" ] ; then
+    ui_print "This is only for the \"${1}\"${2}, your device is a \"${product}\""
+    exit 1
+  fi
+}
+
+setenforce 0
+
+outFD=$2
+ZIP="$3"
+
+readlink /proc/$$/fd/$outFD 2>/dev/null | grep /tmp >/dev/null
+if [ "$?" -eq "0" ]; then
+  outFD=0
+  for FD in `ls /proc/$$/fd`; do
+    readlink /proc/$$/fd/$FD 2>/dev/null | grep pipe >/dev/null
+    if [ "$?" -eq "0" ]; then
+      ps | grep " 3 $FD " | grep -v grep >/dev/null
+      if [ "$?" -eq "0" ]; then
+        outFD=$FD
+        break
+      fi
+    fi
+  done
+fi
+
+check_product "biscuit" " - Amazon Echo Dot 2nd Gen (2016) - "
+
+TMPDIR=/dev/tmp
+INSTALLER=$TMPDIR/install
+
+rm -rf $TMPDIR 2>/dev/null
+mkdir -p $INSTALLER 2>/dev/null
+
+unzip -o "$ZIP" 'amonet/bin/twrp.img' 'amonet/bin/boot.hdr' 'amonet/bin/boot.payload' -d $INSTALLER >&2
+
+ui_print " "
+ui_print "amonet updater for biscuit"
+
+BOOT_A_AMONET=${BYNAME}/boot_a_amonet
+BOOT_B_AMONET=${BYNAME}/boot_b_amonet
+
+fix_symlinks() {
+  if [ -e "$BOOT_A_AMONET" ] && [ -e "$BOOT_B_AMONET" ]; then
+    REAL_A=$(readlink -f "$BOOT_A_AMONET")
+    REAL_B=$(readlink -f "$BOOT_B_AMONET")
+    if [ -b "$REAL_A" ] && [ -b "$REAL_B" ]; then
+      return 0
+    fi
+  fi
+
+  ui_print "(!) boot_b_amonet symlink is broken, attempting to fix"
+
+  REAL_A=$(readlink -f "$BOOT_A_AMONET" 2>/dev/null)
+  if [ ! -b "$REAL_A" ]; then
+    ui_print "(!) boot_a_amonet is also broken, cannot continue"
+    return 1
+  fi
+
+  SKIP="$REAL_A"
+  for name in system_a system_b userdata cache misc persist \
+              tee1 tee1_real tee2 tee2_real \
+              lk_a lk_a_real lk_b lk_b_real; do
+    resolved=$(readlink -f "${BYNAME}/${name}" 2>/dev/null)
+    [ -b "$resolved" ] && SKIP="$SKIP $resolved"
+  done
+
+  SIZE_A=$(blockdev --getsize64 "$REAL_A" 2>/dev/null)
+  THRESHOLD=$((SIZE_A / 10))
+  SIZE_MIN=$((SIZE_A - THRESHOLD))
+  SIZE_MAX=$((SIZE_A + THRESHOLD))
+
+  REAL_B=""
+  for part in /dev/block/mmcblk0p*; do
+    case "$SKIP" in
+      *"$part"*) continue ;;
+    esac
+    SIZE_P=$(blockdev --getsize64 "$part" 2>/dev/null)
+    [ -z "$SIZE_P" ] && continue
+    [ "$SIZE_P" -lt "$SIZE_MIN" ] && continue
+    [ "$SIZE_P" -gt "$SIZE_MAX" ] && continue
+    if grep -qal "This is LK-payload by xyz." "$part" 2>/dev/null; then
+      REAL_B="$part"
+      break
+    fi
+  done
+
+  if [ -z "$REAL_B" ]; then
+    ui_print "(!) Could not find boot_b partition with LK-payload signature"
+    return 1
+  fi
+
+  rm -f "$BOOT_B_AMONET"
+  ln -s "$REAL_B" "$BOOT_B_AMONET"
+
+  ui_print "  boot_b_amonet -> $REAL_B"
+  return 0
+}
+
+if ! fix_symlinks; then
+  ui_print "(!) Failed to resolve boot partitions"
+  exit 1
+fi
+
+ui_print "- updating recovery"
+dd if=${INSTALLER}/amonet/bin/twrp.img of=${BYNAME}/recovery
+
+ui_print "- updating boot_a"
+dd if=${INSTALLER}/amonet/bin/boot.hdr of=${BOOT_A_AMONET} bs=512
+dd if=${INSTALLER}/amonet/bin/boot.payload of=${BOOT_A_AMONET} bs=512 seek=${PAYLOAD_BLOCK}
+
+ui_print "- updating boot_b"
+dd if=${INSTALLER}/amonet/bin/boot.hdr of=${BOOT_B_AMONET} bs=512
+dd if=${INSTALLER}/amonet/bin/boot.payload of=${BOOT_B_AMONET} bs=512 seek=${PAYLOAD_BLOCK}
+
+ui_print "- Update complete"
+ui_print " "
+exit 0
