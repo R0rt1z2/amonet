@@ -1,3 +1,5 @@
+"""Main workflow for flashing the device and preparing it for fastboot access."""
+
 import struct
 import os
 import sys
@@ -9,6 +11,7 @@ from load_payload import load_payload, UserInputThread
 from logger import log
 
 def check_modemmanager():
+    """Abort if ModemManager is running and could interfere with USB access."""
     pids = [pid for pid in os.listdir('/proc') if pid.isdigit()]
 
     for pid in pids:
@@ -21,6 +24,7 @@ def check_modemmanager():
             continue
 
 def switch_boot0(dev):
+    """Switch to the eMMC BOOT0 area and verify its header looks sane."""
     dev.emmc_switch(1)
     block = dev.emmc_read(0)
     if block[0:9] != b"EMMC_BOOT" and block != b"\x00" * 0x200:
@@ -29,6 +33,7 @@ def switch_boot0(dev):
     dev.kick_watchdog()
 
 def flash_data(dev, data, start_block, max_size=0):
+    """Pad and write raw data to consecutive eMMC blocks."""
     while len(data) % 0x200 != 0:
         data += b"\x00"
 
@@ -37,13 +42,14 @@ def flash_data(dev, data, start_block, max_size=0):
 
     blocks = len(data) // 0x200
     for x in range(blocks):
-        print("[{} / {}]".format(x + 1, blocks), end='\r')
+        print(f"[{x + 1} / {blocks}]", end='\r')
         dev.emmc_write(start_block + x, data[x * 0x200:(x + 1) * 0x200])
         if x % 10 == 0:
             dev.kick_watchdog()
     print("")
 
 def flash_binary(dev, path, start_block, max_size=0):
+    """Read a file from disk and flash it to the requested eMMC location."""
     with open(path, "rb") as fin:
         data = fin.read()
     while len(data) % 0x200 != 0:
@@ -52,16 +58,18 @@ def flash_binary(dev, path, start_block, max_size=0):
     flash_data(dev, data, start_block, max_size=0)
 
 def dump_binary(dev, path, start_block, max_size=0):
+    """Dump a block range from eMMC into a local binary file."""
     with open(path, "w+b") as fout:
         blocks = max_size // 0x200
         for x in range(blocks):
-            print("[{} / {}]".format(x + 1, blocks), end='\r')
+            print(f"[{x + 1} / {blocks}]", end='\r')
             fout.write(dev.emmc_read(start_block + x))
         if x % 10 == 0:
             dev.kick_watchdog()
     print("")
 
 def force_fastboot(dev, gpt):
+    """Request a fastboot boot mode by updating the MISC partition."""
     switch_user(dev)
     block = list(dev.emmc_read(gpt["MISC"][0]))
     block[0:16] = "FASTBOOT_PLEASE\x00".encode("utf-8")
@@ -69,6 +77,7 @@ def force_fastboot(dev, gpt):
     block = dev.emmc_read(gpt["MISC"][0])
 
 def force_recovery(dev, gpt):
+    """Request recovery boot mode by updating the MISC partition."""
     switch_user(dev)
     block = list(dev.emmc_read(gpt["MISC"][0]))
     block[0:16] = "boot-recovery\x00\x00\x00".encode("utf-8")
@@ -76,6 +85,7 @@ def force_recovery(dev, gpt):
     block = dev.emmc_read(gpt["MISC"][0])
 
 def switch_user(dev):
+    """Switch to the user eMMC area and verify the GPT signature bytes."""
     dev.emmc_switch(0)
     block = dev.emmc_read(0)
     if block[510:512] != b"\x55\xAA":
@@ -84,6 +94,7 @@ def switch_user(dev):
     dev.kick_watchdog()
 
 def parse_gpt(dev):
+    """Read a fixed GPT entry region from eMMC and map partition names to ranges."""
     data = dev.emmc_read(0x400 // 0x200) + dev.emmc_read(0x600 // 0x200) + dev.emmc_read(0x800 // 0x200) + dev.emmc_read(0xA00 // 0x200)
     num = len(data) // 0x80
     parts = dict()
@@ -96,6 +107,7 @@ def parse_gpt(dev):
     return parts
 
 def main():
+    """Run the flashing workflow that prepares the device for fastboot."""
 
     minimal = False
 
@@ -130,7 +142,7 @@ def main():
 
     # 1.1) Parse gpt
     gpt = parse_gpt(dev)
-    log("gpt_parsed = {}".format(gpt))
+    log(f"gpt_parsed = {gpt}")
     if "lk" not in gpt or "tee1" not in gpt or "boot" not in gpt or "recovery" not in gpt:
         raise RuntimeError("bad gpt")
 
