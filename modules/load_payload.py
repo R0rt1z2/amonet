@@ -1,25 +1,27 @@
+"""Module to load a payload onto the device using the crypto engine.
+This is used to load the payload onto the device, and then jump to it."""
+
 import struct
 import time
 import threading
-
-from common import CRYPTO_BASE
-
+import sys
+from common import CRYPTO_BASE, Device
 from logger import log
 
-
-def init(dev):
-    dev.write32(CRYPTO_BASE + 0x0C0C, 0)
-    dev.write32(CRYPTO_BASE + 0x0C10, 0)
-    dev.write32(CRYPTO_BASE + 0x0C14, 0)
-    dev.write32(CRYPTO_BASE + 0x0C18, 0)
-    dev.write32(CRYPTO_BASE + 0x0C1C, 0)
-    dev.write32(CRYPTO_BASE + 0x0C20, 0)
-    dev.write32(CRYPTO_BASE + 0x0C24, 0)
-    dev.write32(CRYPTO_BASE + 0x0C28, 0)
-    dev.write32(CRYPTO_BASE + 0x0C2C, 0)
-    dev.write32(CRYPTO_BASE + 0x0C00 + 18 * 4, [0] * 4)
-    dev.write32(CRYPTO_BASE + 0x0C00 + 22 * 4, [0] * 4)
-    dev.write32(CRYPTO_BASE + 0x0C00 + 26 * 4, [0] * 8)
+def init(dev_ref):
+    """Initialize the crypto engine by zeroing out all the relevant registers and buffers."""
+    dev_ref.write32(CRYPTO_BASE + 0x0C0C, 0)
+    dev_ref.write32(CRYPTO_BASE + 0x0C10, 0)
+    dev_ref.write32(CRYPTO_BASE + 0x0C14, 0)
+    dev_ref.write32(CRYPTO_BASE + 0x0C18, 0)
+    dev_ref.write32(CRYPTO_BASE + 0x0C1C, 0)
+    dev_ref.write32(CRYPTO_BASE + 0x0C20, 0)
+    dev_ref.write32(CRYPTO_BASE + 0x0C24, 0)
+    dev_ref.write32(CRYPTO_BASE + 0x0C28, 0)
+    dev_ref.write32(CRYPTO_BASE + 0x0C2C, 0)
+    dev_ref.write32(CRYPTO_BASE + 0x0C00 + 18 * 4, [0] * 4)
+    dev_ref.write32(CRYPTO_BASE + 0x0C00 + 22 * 4, [0] * 4)
+    dev_ref.write32(CRYPTO_BASE + 0x0C00 + 26 * 4, [0] * 8)
 
 
 def hw_acquire(dev):
