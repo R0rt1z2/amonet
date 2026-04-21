@@ -25,10 +25,13 @@ def init(dev_ref):
 
 
 def hw_acquire(dev_ref):
+    """Acquire the crypto engine hardware by writing to the relevant registers."""
     dev_ref.write32(CRYPTO_BASE, [0x1F, 0x12000])
 
 
 def call_func(dev_ref, func):
+    """Call a function in the crypto engine by writing
+    to the relevant registers and waiting for the result."""
     dev_ref.write32(CRYPTO_BASE + 0x0804, 3)
     dev_ref.write32(CRYPTO_BASE + 0x0808, 3)
     dev_ref.write32(CRYPTO_BASE + 0x0C00, func)
@@ -36,7 +39,7 @@ def call_func(dev_ref, func):
     while not dev_ref.read32(CRYPTO_BASE + 0x0800):
         pass
     if dev_ref.read32(CRYPTO_BASE + 0x0800) & 2 == 0:
-        if not (dev_ref.read32(CRYPTO_BASE + 0x0800) & 1):
+        if not dev_ref.read32(CRYPTO_BASE + 0x0800) & 1:
             while not dev_ref.read32(CRYPTO_BASE + 0x0800) & 1:
                 pass
         result = -1
@@ -50,6 +53,8 @@ def call_func(dev_ref, func):
 
 
 def aes_write16(dev_ref, addr, data):
+    """Write 16 bytes of data to the crypto engine's internal buffer,
+    which is used for AES operations."""
     if len(data) != 16:
         raise RuntimeError("data must be 16 bytes")
 
@@ -95,6 +100,10 @@ class UserInputThread(threading.Thread):
 
 
 def load_payload(dev_ref, path):
+    """Load a payload onto the device using the crypto engine.
+    This involves initializing the crypto engine,
+    disabling caches and bootrom range checks,
+    writing the payload to memory, and then jumping to it."""
     thread = UserInputThread()
     thread.start()
     while not thread.done:
@@ -115,7 +124,7 @@ def load_payload(dev_ref, path):
 
     with open(path, "rb") as fin:
         payload = fin.read()
-    log("Load payload from {} = 0x{:X} bytes".format(path, len(payload)))
+    log(f"Load payload from {path} = 0x{len(payload):X} bytes")
     while len(payload) % 4 != 0:
         payload += b"\x00"
 
