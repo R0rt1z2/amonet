@@ -1,3 +1,5 @@
+"""Common utilities for karnak and preloader interaction"""
+
 import struct
 import sys
 import glob
