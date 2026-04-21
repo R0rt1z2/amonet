@@ -36,7 +36,7 @@ def get_sectors(gpt_data, lba, count):
             start = len(gpt_data)+(BLOCK_SIZE*lba)
         else:
             start = BLOCK_SIZE*lba
-        sector = gpt_data[start:start+(BLOCK_SIZE*count)] 
+        sector = gpt_data[start:start+(BLOCK_SIZE*count)]
 
     return sector
 
@@ -46,7 +46,7 @@ def get_part_table(gpt_data, gpt_header):
     else:
         start_lba = gpt_header['part_lba']
     part_table = get_sectors(gpt_data, start_lba, ((gpt_header['part_size'] * gpt_header['part_num']) // BLOCK_SIZE))
-    
+
     return part_table
 
 def calc_header_crc32(sector, header_size):
@@ -54,10 +54,10 @@ def calc_header_crc32(sector, header_size):
 
 def parse_header(gpt_data, lba):
     sector = get_sectors(gpt_data, lba, 1)
-    
+
     gpt_header_t = namedtuple('gpt_header', 'signature version header_size header_crc32 reserved this_lba other_lba first_lba last_lba guid part_lba part_num part_size part_crc32')
     gpt_header = gpt_header_t(*struct.unpack(HEADER_STRUCT, sector[:512]))._asdict()
-    
+
     assert gpt_header["signature"] == SIGNATURE, "No valid GPT header found"
 
     header_crc32 = calc_header_crc32(sector, gpt_header['header_size'])
@@ -67,11 +67,11 @@ def parse_header(gpt_data, lba):
     log('Sector size (logical): %s bytes'%BLOCK_SIZE)
     log('Disk identifier (GUID): %s'%str(uuid.UUID(bytes_le=gpt_header['guid'])).upper())
     log('Partition table holds up to %d entries'%gpt_header['part_num'])
-    log('This partition table begins at sector %d and ends at sector %d'%(gpt_header['part_lba'], gpt_header['part_lba'] - 1 + (gpt_header['part_num'] * gpt_header['part_size'] / BLOCK_SIZE))) 
+    log('This partition table begins at sector %d and ends at sector %d'%(gpt_header['part_lba'], gpt_header['part_lba'] - 1 + (gpt_header['part_num'] * gpt_header['part_size'] / BLOCK_SIZE)))
     log('First usable sector is %d, last usable sector is %d'%(gpt_header['first_lba'], gpt_header['last_lba']))
     log('Other partition table is at sector %d'%gpt_header['other_lba'])
     log('')
-    
+
     return gpt_header
 
 def parse_partition(part_table, offset, size):
@@ -80,9 +80,9 @@ def parse_partition(part_table, offset, size):
     return partition
 
 def parse_part_table(part_table, gpt_header):
-    
+
     part_list = []
-   
+
     part_table += b'\x00' * ((gpt_header['part_num'] * gpt_header['part_size']) - len(part_table))
 
     part_crc32 = zlib.crc32(part_table)
@@ -91,11 +91,11 @@ def parse_part_table(part_table, gpt_header):
     log("{:<5}  {:>15}  {:>15}  {:<12}  {:<15} ".format('Number', 'Start (sector)', 'End (sector)', 'Size', 'Name'))
     for partition_num in range(0, gpt_header['part_num']):
         partition = parse_partition(part_table, gpt_header['part_size'] * partition_num, gpt_header['part_size'])
-        
+
         # invalid/empty
         if partition['end'] == 0:
             continue
-        
+
         part_list.append(partition)
         name = partition['name'].decode("utf-16le").rstrip("\x00")
         part_size = (partition['end'] - partition['start'] + 1) * BLOCK_SIZE
@@ -108,7 +108,7 @@ def parse_part_table(part_table, gpt_header):
         log("{:>5}  {:>15}  {:>15}  {:<12s}  {:<15} ".format(partition_num + 1, partition['start'], partition['end'], size, name))
 
     log('')
-    
+
     return part_list
 
 def get_part_by_name(part_list, name):
@@ -157,7 +157,7 @@ def create_header(this_lba, other_lba, last_lba, guid, part_lba, part_crc32):
     return gpt_header
 
 def create_part_table(part_list, part_num=PART_NUM):
-    part_table = b'' 
+    part_table = b''
     for part in part_list:
         part_table += struct.pack(PART_STRUCT, part['type_guid'], part['guid'], part['start'], part['end'], part['attrib'], part['name'])
     part_table += b'\x00' * ((part_num * PART_SIZE) - len(part_table))
@@ -181,7 +181,7 @@ def modify_step1(part_list):
     assert partition['name'].decode("utf-16le").rstrip("\x00") == "userdata", "the last partition is not userdata, refusing modification"
 
     partition['end'] = ((partition['end'] // ALIGN_BLOCKS) * ALIGN_BLOCKS) - 0x6E000 - 1
-    
+
     partition_n = partition.copy()
     partition_n['guid'] = uuid.uuid4().bytes_le
     partition_n['start'] = partition['end'] + 1
@@ -240,7 +240,7 @@ def unpatch(gpt_header, part_list):
     return part_list_n
 
 def main():
-    
+
     if len(sys.argv) == 2:
         cmd = "print"
         in_file = sys.argv[1]
@@ -250,25 +250,25 @@ def main():
     else:
         print("Usage: " + sys.argv[0]  + " [ print | patch | unpatch ] <filename>")
         sys.exit()
-    
+
     f = open(in_file, 'rb')
 
     log("Input GPT:")
-    
+
     gpt_header, part_list = parse_gpt(f)
 
     log("Regenerate primary and backup GPT from input")
     primary, backup = generate_gpt(gpt_header, part_list)
 
-    log("Writing regenerated GPT to " + in_file + ".gpt") 
+    log("Writing regenerated GPT to " + in_file + ".gpt")
     with open(in_file + '.gpt', 'wb') as fout:
         fout.write(primary)
 
-    log("Writing regenerated backup GPT to " + in_file + ".bak") 
+    log("Writing regenerated backup GPT to " + in_file + ".bak")
     with open(in_file + '.bak', 'wb') as fout:
         fout.write(backup)
 
-    log("Writing backup GPT offset to " + in_file + ".offset") 
+    log("Writing backup GPT offset to " + in_file + ".offset")
     with open(in_file + '.offset', 'w') as fout:
         fout.write("{}\n".format(gpt_header['last_lba'] + 1))
 
@@ -281,10 +281,10 @@ def main():
         log("Modified GPT Step 1:")
         gpt_header, part_list = parse_gpt(bytes(primary_step1))
 
-        log("Writing primary GPT (part 1) to " + in_file + ".step1.gpt") 
+        log("Writing primary GPT (part 1) to " + in_file + ".step1.gpt")
         with open(in_file + '.step1.gpt', 'wb') as fout:
             fout.write(primary_step1)
-        log("Writing backup GPT (part 1) to " + in_file + ".step1.bak") 
+        log("Writing backup GPT (part 1) to " + in_file + ".step1.bak")
         with open(in_file + '.step1.bak', 'wb') as fout:
             fout.write(backup_step1)
 
@@ -295,10 +295,10 @@ def main():
         log("Modified GPT Step 2:")
         gpt_header, part_list = parse_gpt(bytes(primary_step2))
 
-        log("Writing primary GPT (part 2) to " + in_file + ".step2.gpt") 
+        log("Writing primary GPT (part 2) to " + in_file + ".step2.gpt")
         with open(in_file + '.step2.gpt', 'wb') as fout:
             fout.write(primary_step2)
-        log("Writing backup GPT (part 2) to " + in_file + ".step2.bak") 
+        log("Writing backup GPT (part 2) to " + in_file + ".step2.bak")
         with open(in_file + '.step2.bak', 'wb') as fout:
             fout.write(backup_step2)
 
@@ -310,14 +310,14 @@ def main():
         log("Unpatched GPT:")
         gpt_header, part_list = parse_gpt(bytes(primary_unpatched))
 
-        log("Writing primary GPT (unpatched) to " + in_file + ".unpatched.gpt") 
+        log("Writing primary GPT (unpatched) to " + in_file + ".unpatched.gpt")
         with open(in_file + '.unpatched.gpt', 'wb') as fout:
             fout.write(primary_unpatched)
-        log("Writing backup GPT (unpatched) to " + in_file + ".unpatched.bak") 
+        log("Writing backup GPT (unpatched) to " + in_file + ".unpatched.bak")
         with open(in_file + '.unpatched.bak', 'wb') as fout:
             fout.write(backup_unpatched)
 
     f.close()
-    
+
 if __name__ == "__main__":
     main()
