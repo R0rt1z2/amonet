@@ -1,12 +1,15 @@
+"""Handshake module for Amonet."""
+
 import sys
 
 from common import Device
 from logger import log
 
 
-def handshake(dev):
+def handshake(dev_ref):
+    """Perform a handshake with the device."""
     log("Handshake")
-    dev.handshake()
+    dev_ref.handshake()
 
 
 if __name__ == "__main__":
