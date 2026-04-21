@@ -1,3 +1,5 @@
+"""GPT parsing and generation module for Amonet."""
+
 #!/usr/bin/env python3
 
 import sys
@@ -22,6 +24,11 @@ HEADER_STRUCT = '<8sIIIIQQQQ16sQIII420x'
 PART_STRUCT = '<16s16sQQQ72s'
 
 def get_sectors(gpt_data, lba, count):
+    """Return one or more logical sectors from a GPT image.
+
+    The input may be a buffered file handle or an in-memory bytes object.
+    Negative LBAs are resolved relative to the end of the image.
+    """
     sector = b''
 
     if isinstance(gpt_data, BufferedReader):
@@ -41,18 +48,22 @@ def get_sectors(gpt_data, lba, count):
     return sector
 
 def get_part_table(gpt_data, gpt_header):
+    """Return the raw GPT partition entry array described by the header."""
     if gpt_header['part_lba'] != 2:
         start_lba = - (((gpt_header['part_size'] * gpt_header['part_num']) // BLOCK_SIZE) + 1)
     else:
         start_lba = gpt_header['part_lba']
-    part_table = get_sectors(gpt_data, start_lba, ((gpt_header['part_size'] * gpt_header['part_num']) // BLOCK_SIZE))
+    part_table = get_sectors(gpt_data, start_lba,
+                             ((gpt_header['part_size'] * gpt_header['part_num']) // BLOCK_SIZE))
 
     return part_table
 
 def calc_header_crc32(sector, header_size):
+    """Compute the GPT header CRC32 with the checksum field cleared."""
     return zlib.crc32(sector[:0x10] + b'\x00\x00\x00\x00' + sector[0x10 + 4:header_size])
 
 def parse_header(gpt_data, lba):
+    """Parse and validate a GPT header from the requested LBA."""
     sector = get_sectors(gpt_data, lba, 1)
 
     gpt_header_t = namedtuple('gpt_header', 'signature version header_size header_crc32 reserved this_lba other_lba first_lba last_lba guid part_lba part_num part_size part_crc32')
@@ -75,11 +86,13 @@ def parse_header(gpt_data, lba):
     return gpt_header
 
 def parse_partition(part_table, offset, size):
+    """Parse a single partition entry from the raw partition table bytes."""
     partition_t = namedtuple('partition', 'type_guid guid start end attrib name')
     partition = partition_t(*struct.unpack(PART_STRUCT, part_table[offset:offset+size]))._asdict()
     return partition
 
 def parse_part_table(part_table, gpt_header):
+    """Validate the GPT partition array and return populated entries."""
 
     part_list = []
 
@@ -112,6 +125,7 @@ def parse_part_table(part_table, gpt_header):
     return part_list
 
 def get_part_by_name(part_list, name):
+    """Return the first partition whose UTF-16LE name matches ``name``."""
     for part in part_list:
         try:
             if part['name'].decode("utf-16le").rstrip("\x00") == name:
@@ -122,6 +136,7 @@ def get_part_by_name(part_list, name):
 
 
 def parse_gpt(gpt_data):
+    """Parse a GPT image, falling back to the backup header if needed."""
     try:
         gpt_header = parse_header(gpt_data, PRIMARY_GPT_LBA)
     except:
@@ -137,6 +152,7 @@ def parse_gpt(gpt_data):
     return gpt_header, part_list
 
 def parse_gpt_compat(gpt_data):
+    """Return GPT data in the legacy tuple format expected by older callers."""
     gpt_header, part_list = parse_gpt((b'\x00' * BLOCK_SIZE) + gpt_data)
     parts = dict()
     for part in part_list:
@@ -145,18 +161,21 @@ def parse_gpt_compat(gpt_data):
     return parts, gpt_header, part_list
 
 def gen_mbr():
+    """Build the protective MBR sector that precedes the GPT headers."""
     mbr = bytearray(b'\x00' * BLOCK_SIZE)
     mbr[0x1c0:0x1d0]=bytes.fromhex('0200eeffffff01000000ffffffff0000')
     mbr[0x1f0:0x200]=bytes.fromhex('000000000000000000000000000055aa')
     return mbr
 
 def create_header(this_lba, other_lba, last_lba, guid, part_lba, part_crc32):
+    """Create a GPT header sector with a freshly calculated header checksum."""
     gpt_header = struct.pack(HEADER_STRUCT, SIGNATURE, 0x010000, HEADER_SIZE, 0x00,         0x00, this_lba, other_lba, 0x22, last_lba, guid, part_lba, PART_NUM, PART_SIZE, part_crc32)
     header_crc32 = calc_header_crc32(gpt_header, HEADER_SIZE)
     gpt_header = struct.pack(HEADER_STRUCT, SIGNATURE, 0x010000, HEADER_SIZE, header_crc32, 0x00, this_lba, other_lba, 0x22, last_lba, guid, part_lba, PART_NUM, PART_SIZE, part_crc32)
     return gpt_header
 
 def create_part_table(part_list, part_num=PART_NUM):
+    """Serialize partition dictionaries into a padded GPT entry array."""
     part_table = b''
     for part in part_list:
         part_table += struct.pack(PART_STRUCT, part['type_guid'], part['guid'], part['start'], part['end'], part['attrib'], part['name'])
@@ -164,6 +183,7 @@ def create_part_table(part_list, part_num=PART_NUM):
     return part_table
 
 def generate_gpt(gpt_header, part_list):
+    """Generate the primary and backup GPT byte streams for a partition layout."""
     mbr = gen_mbr()
 
     part_table = create_part_table(part_list)
@@ -174,6 +194,7 @@ def generate_gpt(gpt_header, part_list):
     return primary, backup
 
 def modify_step1(part_list):
+    """Shrink ``userdata`` and append temporary boot and recovery partitions."""
     part_list_n = part_list.copy()
     part_n = len(part_list) - 1
     partition = part_list_n[len(part_list_n) - 1]
@@ -199,6 +220,7 @@ def modify_step1(part_list):
     return part_list_n
 
 def modify_step2(part_list):
+    """Swap the original and temporary boot and recovery partition names."""
 
     part_list_n = part_list.copy()
     partition = get_part_by_name(part_list_n, "boot")
@@ -220,6 +242,7 @@ def modify_step2(part_list):
     return part_list_n
 
 def unpatch(gpt_header, part_list):
+    """Restore the original userdata size and remove temporary partitions."""
     part_list_n = part_list.copy()
     part_n = len(part_list) - 1
     partition = part_list_n[len(part_list_n) - 3]
@@ -240,6 +263,7 @@ def unpatch(gpt_header, part_list):
     return part_list_n
 
 def main():
+    """Run the CLI that prints, patches, or unpatches GPT images."""
 
     if len(sys.argv) == 2:
         cmd = "print"
@@ -269,7 +293,7 @@ def main():
         fout.write(backup)
 
     log("Writing backup GPT offset to " + in_file + ".offset")
-    with open(in_file + '.offset', 'w') as fout:
+    with open(in_file + '.offset', 'w', encoding='utf-8') as fout:
         fout.write("{}\n".format(gpt_header['last_lba'] + 1))
 
     if cmd == "patch":
