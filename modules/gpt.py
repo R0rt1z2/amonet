@@ -72,7 +72,7 @@ def parse_header(gpt_data, lba):
     assert gpt_header["signature"] == SIGNATURE, "No valid GPT header found"
 
     header_crc32 = calc_header_crc32(sector, gpt_header['header_size'])
-    assert header_crc32 == gpt_header['header_crc32'], "GPT header is corrupt, expected CRC32 %.8X but got %.8X" % (header_crc32, gpt_header["header_crc32"])
+    assert header_crc32 == gpt_header['header_crc32'], f"GPT header is corrupt, expected CRC32 {header_crc32:.8X} but got {gpt_header['header_crc32']:.8X}"
 
     log('')
     log(f'Sector size (logical): {BLOCK_SIZE} bytes')
@@ -99,9 +99,9 @@ def parse_part_table(part_table, gpt_header):
     part_table += b'\x00' * ((gpt_header['part_num'] * gpt_header['part_size']) - len(part_table))
 
     part_crc32 = zlib.crc32(part_table)
-    assert part_crc32 == gpt_header['part_crc32'], "Partition table is corrupt, expected CRC32 %.8X but got %.8X" % (part_crc32, gpt_header["part_crc32"])
+    assert part_crc32 == gpt_header['part_crc32'], f"Partition table is corrupt, expected CRC32 {part_crc32:.8X} but got {gpt_header['part_crc32']:.8X}"
 
-    log("{:<5}  {:>15}  {:>15}  {:<12}  {:<15} ".format('Number', 'Start (sector)', 'End (sector)', 'Size', 'Name'))
+    log(f"{'Number':<5}  {'Start (sector)':>15}  {'End (sector)':>15}  {'Size':<12}  {'Name':<15} ")
     for partition_num in range(0, gpt_header['part_num']):
         partition = parse_partition(part_table, gpt_header['part_size'] * partition_num, gpt_header['part_size'])
 
@@ -117,8 +117,8 @@ def parse_part_table(part_table, gpt_header):
         while part_size > 0x400:
             part_size /= 0x400
             unit += 1
-        size = "{:.2f} {:s}".format(part_size, units[unit])
-        log("{:>5}  {:>15}  {:>15}  {:<12s}  {:<15} ".format(partition_num + 1, partition['start'], partition['end'], size, name))
+        size = f"{part_size:.2f} {units[unit]}"
+        log(f"{partition_num + 1:>5}  {partition['start']:>15}  {partition['end']:>15}  {size:<12s}  {name:<15} ")
 
     log('')
 
@@ -294,7 +294,7 @@ def main():
 
     log("Writing backup GPT offset to " + in_file + ".offset")
     with open(in_file + '.offset', 'w', encoding='utf-8') as fout:
-        fout.write("{}\n".format(gpt_header['last_lba'] + 1))
+        fout.write(f"{gpt_header['last_lba'] + 1}\n")
 
     if cmd == "patch":
 
