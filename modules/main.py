@@ -1,3 +1,5 @@
+"""Main workflow for flashing the device and preparing it for fastboot access."""
+
 import struct
 import os
 import sys
@@ -40,7 +42,7 @@ def flash_data(dev, data, start_block, max_size=0):
 
     blocks = len(data) // 0x200
     for x in range(blocks):
-        print("[{} / {}]".format(x + 1, blocks), end='\r')
+        print(f"[{x + 1} / {blocks}]", end='\r')
         dev.emmc_write(start_block + x, data[x * 0x200:(x + 1) * 0x200])
         if x % 10 == 0:
             dev.kick_watchdog()
@@ -60,7 +62,7 @@ def dump_binary(dev, path, start_block, max_size=0):
     with open(path, "w+b") as fout:
         blocks = max_size // 0x200
         for x in range(blocks):
-            print("[{} / {}]".format(x + 1, blocks), end='\r')
+            print(f"[{x + 1} / {blocks}]", end='\r')
             fout.write(dev.emmc_read(start_block + x))
         if x % 10 == 0:
             dev.kick_watchdog()
