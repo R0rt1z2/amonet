@@ -26,7 +26,7 @@ def serial_ports ():
     """
 
     if sys.platform.startswith("win"):
-        ports = [ "COM{0:d}".format(i + 1) for i in range(256) ]
+        ports = [ f"COM{i + 1}" for i in range(256) ]
     elif sys.platform.startswith("linux"):
         ports = glob.glob("/dev/ttyACM*")
     elif sys.platform.startswith("darwin"):
@@ -47,17 +47,24 @@ def serial_ports ():
 
 
 def p32_be(x):
+    """param x: 32-bit integer
+    :return: 4-byte big-endian representation of x
+    """
     return struct.pack(">I", x)
 
 
 class Device:
-
+    """Represents a connected device, either in bootrom or preloader stage."""
     def __init__(self, port=None):
         self.dev = None
         if port:
             self.dev = serial.Serial(port, BAUD, timeout=TIMEOUT)
 
     def find_device(self,preloader=False):
+        """Finds a connected device.
+
+        :param preloader: If True, waits for the preloader. Otherwise, waits for the bootrom.
+        """
         if self.dev:
             raise RuntimeError("Device already found")
 
@@ -80,15 +87,17 @@ class Device:
 
             time.sleep(0.25)
 
-        log("Found port = {}".format(port))
+        log(f"Found port = {port}")
 
         self.dev = serial.Serial(port, BAUD, timeout=TIMEOUT)
 
     def check(self, test, gold):
+        """Check that test == gold, otherwise raise an error."""
         if test != gold:
             raise RuntimeError("ERROR: Serial protocol mismatch")
 
     def check_int(self, test, gold):
+        """Check that test == gold for integers, otherwise raise an error."""
         test = struct.unpack('>I', test)[0]
         self.check(test, gold)
 
@@ -97,6 +106,7 @@ class Device:
         return self.dev.read()
 
     def handshake(self):
+        """Perform the handshake with the bootrom."""
         # look for start byte
         while True:
             c = self._writeb(b'\xa0')
@@ -110,6 +120,7 @@ class Device:
         self.check(self._writeb(b'\x05'), b'\xfa')
 
     def handshake2(self, cmd='FACTFACT'):
+        """Perform the handshake with the preloader."""
         # look for start byte
         c = 0
         while c != b'Y':
@@ -120,6 +131,7 @@ class Device:
         self.dev.flushInput()
 
     def read32(self, addr, size=1):
+        """Read 32-bit words from the device."""
         result = []
 
         self.dev.write(b'\xd1')
@@ -146,6 +158,7 @@ class Device:
             return result
 
     def write32(self, addr, words, status_check=True):
+        """Write 32-bit words to the device."""
         # support scalar
         if not isinstance(words, list):
             words = [ words ]
@@ -169,6 +182,7 @@ class Device:
             self.check(self.dev.read(2), b'\x00\x01') # status
 
     def run_ext_cmd(self, cmd):
+        """Run an external command on the device."""
         self.dev.write(b'\xC8')
         self.check(self.dev.read(1), b'\xC8') # echo cmd
         cmd = bytes([cmd])
@@ -178,11 +192,13 @@ class Device:
         self.dev.read(2)
 
     def wait_payload(self):
+        """Wait for the payload to be sent by the device."""
         data = self.dev.read(4)
         if data != b"\xB1\xB2\xB3\xB4":
-            raise RuntimeError("received {} instead of expected pattern".format(data))
+            raise RuntimeError(f"received {data} instead of expected pattern")
 
     def emmc_read(self, idx):
+        """Read a 512-byte block from the eMMC at the given index."""
         # magic
         self.dev.write(p32_be(0xf00dd00d))
         # cmd
@@ -197,6 +213,7 @@ class Device:
         return data
 
     def emmc_write(self, idx, data):
+        """Write a 512-byte block to the eMMC at the given index."""
         if len(data) != 0x200:
             raise RuntimeError("data must be 0x200 bytes")
 
@@ -214,6 +231,7 @@ class Device:
             raise RuntimeError("device failure")
 
     def emmc_switch(self, part):
+        """Switch the eMMC partition."""
         # magic
         self.dev.write(p32_be(0xf00dd00d))
         # cmd
@@ -222,18 +240,21 @@ class Device:
         self.dev.write(p32_be(part))
 
     def reboot(self):
+        """Reboot the device."""
         # magic
         self.dev.write(p32_be(0xf00dd00d))
         # cmd
-        self.dev.write(p32_be(0x3000))        
+        self.dev.write(p32_be(0x3000))
 
     def kick_watchdog(self):
+        """Kick the watchdog timer."""
         # magic
         self.dev.write(p32_be(0xf00dd00d))
         # cmd
         self.dev.write(p32_be(0x3001))
 
     def rpmb_read(self):
+        """Read a 256-byte block from the RPMB."""
         # magic
         self.dev.write(p32_be(0xf00dd00d))
         # cmd
@@ -246,6 +267,7 @@ class Device:
         return data
 
     def rpmb_write(self, data):
+        """Write a 256-byte block to the RPMB."""
         if len(data) != 0x100:
             raise RuntimeError("data must be 0x100 bytes")
 
