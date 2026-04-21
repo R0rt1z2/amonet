@@ -75,12 +75,12 @@ def parse_header(gpt_data, lba):
     assert header_crc32 == gpt_header['header_crc32'], "GPT header is corrupt, expected CRC32 %.8X but got %.8X" % (header_crc32, gpt_header["header_crc32"])
 
     log('')
-    log('Sector size (logical): %s bytes'%BLOCK_SIZE)
-    log('Disk identifier (GUID): %s'%str(uuid.UUID(bytes_le=gpt_header['guid'])).upper())
-    log('Partition table holds up to %d entries'%gpt_header['part_num'])
-    log('This partition table begins at sector %d and ends at sector %d'%(gpt_header['part_lba'], gpt_header['part_lba'] - 1 + (gpt_header['part_num'] * gpt_header['part_size'] / BLOCK_SIZE)))
-    log('First usable sector is %d, last usable sector is %d'%(gpt_header['first_lba'], gpt_header['last_lba']))
-    log('Other partition table is at sector %d'%gpt_header['other_lba'])
+    log(f'Sector size (logical): {BLOCK_SIZE} bytes')
+    log(f'Disk identifier (GUID): {str(uuid.UUID(bytes_le=gpt_header["guid"])).upper()}')
+    log(f'Partition table holds up to {gpt_header["part_num"]} entries')
+    log(f'This partition table begins at sector {gpt_header["part_lba"]} and ends at sector {gpt_header["part_lba"] - 1 + (gpt_header["part_num"] * gpt_header["part_size"] / BLOCK_SIZE)}')
+    log(f'First usable sector is {gpt_header["first_lba"]}, last usable sector is {gpt_header["last_lba"]}')
+    log(f'Other partition table is at sector {gpt_header["other_lba"]}')
     log('')
 
     return gpt_header
