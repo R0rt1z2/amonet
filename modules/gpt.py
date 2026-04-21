@@ -139,13 +139,13 @@ def parse_gpt(gpt_data):
     """Parse a GPT image, falling back to the backup header if needed."""
     try:
         gpt_header = parse_header(gpt_data, PRIMARY_GPT_LBA)
-    except:
+    except (AssertionError, OSError, struct.error, ValueError):
         log("No valid primary GPT header found, looking for backup GPT")
         try:
             gpt_header = parse_header(gpt_data, -1)
-        except:
+        except (AssertionError, OSError, struct.error, ValueError) as exc:
             log("No valid backup GPT found")
-            raise LookupError("No valid GPT found")
+            raise LookupError("No valid GPT found") from exc
 
     part_table = get_part_table(gpt_data, gpt_header)
     part_list = parse_part_table(part_table, gpt_header)
