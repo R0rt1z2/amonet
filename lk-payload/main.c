@@ -4,12 +4,19 @@
 #include "bootimg.h"
 
 #include <bcbtool/lib/bcblib.h>
+#include <idmelib.h>
 
 int (*original_read)(struct device_t *dev, uint64_t block_off, void *dst, size_t sz, int part) = (void*)0x4BD2AE2D;
 int (*app)() = (void*)0x4BD341D5;
+void (*lk_jump64)(uint32_t addr, uint32_t arg1, uint32_t arg2, uint32_t arg3) = (void*)(0x4BD3309C | 1);
 
 uint64_t g_boot_a, g_boot_a_x, g_boot_b, g_boot_b_x, g_expdb, g_lk_a, g_lk_b, g_misc, g_recovery;
 uint8_t boot_recovery = 0;
+
+struct uboot_params {
+    uint64_t device_type_id;
+    uint64_t boot_argument;
+};
 
 void set_led_ring(uint8_t colors[12][3]) {
     static uint8_t frame[36];
@@ -200,6 +207,60 @@ static bool write_bcb(struct device_t *dev, struct bcb *data) {
     return true;
 }
 
+static int idme_get_device_type_id(char *out, size_t out_size) {
+    static uint8_t idme_buf[IDME_SIZE] __attribute__((aligned(64)));
+    struct device_t *dev = get_device();
+
+    if (dev->read(dev, 0, idme_buf, sizeof(idme_buf), BOOT1_PART) != sizeof(idme_buf)) {
+        printf("Failed to read IDME\n");
+        return -1;
+    }
+
+    struct idme *hdr = (struct idme *)idme_buf;
+    if (!idmelib_magic_valid(hdr)) {
+        printf("IDME magic invalid\n");
+        return -1;
+    }
+
+    return idmelib_get_var(hdr, "device_type_id", out, out_size);
+}
+
+static uint8_t get_chainload(void) {
+    struct device_t *dev = get_device();
+    uint8_t buf[0x10] = { 0 };
+
+    dev->read(dev, (g_expdb + CHAINLOAD_FLAG_BLOCK) * 0x200, buf, sizeof(buf), USER_PART);
+    return buf[0] == 1;
+}
+
+static void set_chainload(uint8_t enabled) {
+    struct device_t *dev = get_device();
+    uint8_t buf[0x10] = { 0 };
+
+    buf[0] = enabled ? 1 : 0;
+    dev->write(dev, buf, (g_expdb + CHAINLOAD_FLAG_BLOCK) * 0x200, sizeof(buf), USER_PART);
+}
+
+static int flash_uboot(void *data, unsigned sz)
+{
+    struct device_t *dev = get_device();
+    size_t aligned = (sz + 0x1FF) & ~0x1FF;
+
+    fastboot_info("");
+    fastboot_info("[amonet] Flashing u-boot...");
+
+    if (aligned > sz)
+        memset((uint8_t *)data + sz, 0, aligned - sz);
+
+    if (dev->write(dev, data, (g_expdb + UBOOT_BLOCK) * 0x200, aligned, USER_PART) != aligned) {
+        fastboot_fail("Failed to write u-boot");
+        return -1;
+    }
+
+    fastboot_info("[amonet] OK");
+    return 0;
+}
+
 static int flash_payload(void *data, unsigned sz)
 {
     struct device_t *dev = get_device();
@@ -308,6 +369,15 @@ void cmd_flash_wrapper(const char *arg, void *data, unsigned sz) {
         return;
     }
 
+    if (strncmp(name, "uboot", 5) == 0) {
+        if (flash_uboot(data, sz) < 0) {
+            fastboot_fail("Failed to flash u-boot");
+        } else {
+            fastboot_okay("");
+        }
+        return;
+    }
+
     cmd_flash(name, data, sz);
 }
 
@@ -380,6 +450,33 @@ void cmd_set_active(const char *arg, void *data, unsigned sz) {
     fastboot_okay("");
 }
 
+void cmd_chainload(const char *arg, void *data, unsigned sz) {
+    if (!g_expdb) {
+        fastboot_fail("No expdb partition found!");
+        return;
+    }
+
+    const char *value = arg + 1;
+
+    if (*arg == '\0') {
+        fastboot_info(get_chainload() ? "Chainload is enabled" : "Chainload is disabled");
+        fastboot_okay("");
+        return;
+    }
+
+    if (*value == '0') {
+        set_chainload(0);
+        fastboot_info("Chainload disabled");
+        fastboot_okay("");
+    } else if (*value == '1') {
+        set_chainload(1);
+        fastboot_info("Chainload enabled");
+        fastboot_okay("");
+    } else {
+        fastboot_fail("Invalid value. Use 0 or 1");
+    }
+}
+
 void prepare_fastboot() {
     uint16_t *patch;
 
@@ -404,12 +501,18 @@ void prepare_fastboot() {
     // Add reboot recovery command
     fastboot_register("oem reboot-recovery", cmd_reboot_recovery, 1);
 
+    // Control chainloading
+    fastboot_register("oem chainload", cmd_chainload, 1);
+
     // This is so we can easily switch slots
     fastboot_publish("slot-count", "2");
     fastboot_register("set_active", cmd_set_active, 1);
 
     // This is so we can easily identify the amonet version
     fastboot_publish("amonet-version", AMONET_VERSION);
+
+    // Expose the current chainload status
+    fastboot_publish("chainload", get_chainload() ? "1" : "0");
 }
 
 static char current_slot[2] = "a";
@@ -576,6 +679,27 @@ int main() {
                 *patch32 = 0;
             }
         }
+    }
+
+    if (!fastboot && !boot_recovery && get_chainload()) {
+        static char device_type_id[64] = { 0 };
+        static struct uboot_params params;
+
+        printf("Chainload enabled, jumping to u-boot\n");
+
+        idme_get_device_type_id(device_type_id, sizeof(device_type_id));
+        printf("device_type_id: %s\n", device_type_id);
+
+        params.device_type_id = (uint32_t)device_type_id;
+        params.boot_argument = G_BOOT_ARG;
+
+        printf("params @ 0x%08X device_type_id=0x%08X boot_argument=0x%08X\n",
+               (uint32_t)&params, (uint32_t)params.device_type_id, (uint32_t)params.boot_argument);
+
+        dev->read(dev, (g_expdb + UBOOT_BLOCK) * 0x200, (void *)UBOOT_ADDR, UBOOT_SIZE, USER_PART);
+        cache_clean((void *)UBOOT_ADDR, UBOOT_SIZE);
+
+        lk_jump64(UBOOT_ADDR, (uint32_t)&params, 0, 1);
     }
 
     // The device is unlocked

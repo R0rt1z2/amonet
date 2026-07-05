@@ -4,3 +4,6 @@
 [submodule "lk-payload/libaeabi-cortexm0"]
 	path = lk-payload/libaeabi-cortexm0
 	url = https://github.com/bobbl/libaeabi-cortexm0.git
+[submodule "lk-payload/idmetool"]
+	path = lk-payload/idmetool
+	url = https://github.com/R0rt1z2/idmetool.git

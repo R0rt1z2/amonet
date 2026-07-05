@@ -6,14 +6,14 @@ PAYLOAD_BLOCK := 223207
 AMONET_VERSION := 1.1.0
 
 CFLAGS := -std=gnu99 -Os -mthumb -mcpu=cortex-a9 -fno-builtin-printf -fno-strict-aliasing -fno-builtin-memcpy -mno-unaligned-access -DPRINTF_DISABLE_SUPPORT_FLOAT=1
-CFLAGS += -I. -I./bcbtool/include -DPAYLOAD_BLOCK=$(PAYLOAD_BLOCK) -DAMONET_VERSION=\"$(AMONET_VERSION)\"
+CFLAGS += -I. -I./bcbtool/include -I./idmetool/lib -DIDMELIB_STANDALONE -DPAYLOAD_BLOCK=$(PAYLOAD_BLOCK) -DAMONET_VERSION=\"$(AMONET_VERSION)\"
 LDFLAGS := -T linker.x -nodefaultlibs -nostdlib
 
 BUILD_DIR := ./build
 
 TARGET := payload
 
-C_SRC = main.c debug.c libc.c bcbtool/lib/bcblib.c
+C_SRC = main.c debug.c libc.c bcbtool/lib/bcblib.c idmetool/lib/idmelib.c
 ASM_SRC = start.S
 ASM_SRC += $(wildcard libaeabi-cortexm0/*.S)
 

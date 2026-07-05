@@ -47,5 +47,14 @@ uint32_t* o_boot_mode = (uint32_t*) 0x4BE5E20C; // argptr boot mode
 #define LK_SIZE (0x800 * 0x200)
 #define LK_BASE 0x4BD00000
 
+#define G_BOOT_ARG 0x4BD66360
+
+#define CHAINLOAD_FLAG_BLOCK 1
+#define UBOOT_BLOCK 2
+
+#define UBOOT_ADDR 0x46000000
+#define UBOOT_SIZE 0x200000
+
 #define BOOT0_PART 1
+#define BOOT1_PART 2
 #define USER_PART 8
