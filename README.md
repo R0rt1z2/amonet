@@ -8,6 +8,6 @@ For installation instructions, see https://xdaforums.com/t/unlock-root-twrp-unbr
 
 `brom-payload` includes code from Linux kernel, and is therefore licensed under GPLv2.
 
-`lk-payload`, `modules` and `microloader` are licensed under MIT.
+`modules` is licensed under MIT.
 
 See LICENSE.MIT and LICENSE.GPL2 for more details.
