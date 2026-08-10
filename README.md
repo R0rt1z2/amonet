@@ -1,13 +1,21 @@
 # amonet
 
-This is an exploit chain for Echo Show 5 (2019) (1st gen / checkers / AEOCH). It contains a MediaTek bootrom exploit and a LittleKernel bootloader exploit.
+This is an exploit chain for some models of the Amazon Echo Show. It contains a MediaTek bootrom exploit and a Preloader exploit.
 
-For installation instructions, see https://xdaforums.com/t/unlock-root-twrp-unbrick-amazon-echo-show-5-1st-gen-2019-checkers.4762900/
+## Supported devices
+
+| Device | Codename | Product | Installation instructions |
+| --- | --- | --- | --- |
+| Echo Show 5 1st Gen (2019) | checkers | AEOCH | https://xdaforums.com/t/unlock-root-twrp-unbrick-amazon-echo-show-5-1st-gen-2019-checkers.4762900/ |
+| Echo Show 8 1st Gen (2019) | crown | AEOCW | https://xdaforums.com/t/unlock-root-twrp-unbrick-amazon-echo-show-8-1st-gen-2019-crown.4766687/ |
+| Echo Show 5 2nd Gen (2021) | cronos | AEOCN | https://xdaforums.com/t/unlock-root-twrp-unbrick-amazon-echo-show-5-2nd-gen-2021-cronos.4772596/ |
 
 ## License
 
 `brom-payload` includes code from Linux kernel, and is therefore licensed under GPLv2.
 
-`lk-payload`, `modules` and `microloader` are licensed under MIT.
+`pl-payload` is licensed under MIT.
+
+`modules` is licensed under MIT.
 
 See LICENSE.MIT and LICENSE.GPL2 for more details.

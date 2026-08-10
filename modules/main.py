@@ -1,3 +1,4 @@
+import glob
 import struct
 import os
 import sys
@@ -42,6 +43,23 @@ def flash_data(dev, data, start_block, max_size=0):
         if x % 10 == 0:
             dev.kick_watchdog()
     print("")
+
+def find_binary(name):
+    device = os.environ.get("DEVICE")
+    if device:
+        roots = ["../bin/{}".format(device)]
+    else:
+        roots = ["../bin", "../bin/*"]
+
+    matches = []
+    for root in roots:
+        matches += sorted(glob.glob("{}/{}".format(root, name)))
+
+    if not matches:
+        raise RuntimeError("no file matching {} found in bin/".format(name))
+    if len(matches) > 1:
+        raise RuntimeError("multiple files matching {}: {}; set DEVICE to pick one".format(name, ", ".join(matches)))
+    return matches[0]
 
 def flash_binary(dev, path, start_block, max_size=0):
     with open(path, "rb") as fin:
@@ -97,8 +115,6 @@ def parse_gpt(dev):
 
 def main():
 
-    minimal = False
-
     check_modemmanager()
 
     dev = Device()
@@ -111,18 +127,10 @@ def main():
     load_payload(dev, "../brom-payload/build/payload.bin")
     dev.kick_watchdog()
 
-    if len(sys.argv) == 2 and sys.argv[1] == "minimal":
-        thread = UserInputThread(msg = "Running in minimal mode, assuming LK, TZ, LK-payload and TWRP to have already been flashed.\nIf this is correct (i.e. you used \"brick\" option in step 1) press enter, otherwise terminate with Ctrl+C")
-        thread.start()
-        while not thread.done:
-            dev.kick_watchdog()
-            time.sleep(1)
-        minimal = True
-
     if len(sys.argv) == 2 and sys.argv[1] == "fixgpt":
         dev.emmc_switch(0)
         log("Flashing GPT")
-        flash_binary(dev, "../bin/gpt-checkers.bin", 0, 34 * 0x200)
+        flash_binary(dev, find_binary("gpt-*.bin"), 0, 34 * 0x200)
 
     # 1) Sanity check GPT
     log("Check GPT")
@@ -131,12 +139,17 @@ def main():
     # 1.1) Parse gpt
     gpt = parse_gpt(dev)
     log("gpt_parsed = {}".format(gpt))
-    if "lk" not in gpt or "tee1" not in gpt or "boot" not in gpt or "recovery" not in gpt:
-        raise RuntimeError("bad gpt")
+    for part in ("lk", "tee1", "tee2", "expdb", "MISC"):
+        if part not in gpt:
+            raise RuntimeError("bad gpt, missing {}".format(part))
 
     # 2) Sanity check boot0
     log("Check boot0")
     switch_boot0(dev)
+
+    # 2.1) Clear preloader so, we get into bootrom without shorting, should the script stall (we flash preloader as last step)
+    log("Clear preloader header")
+    flash_data(dev, b"EMMC_BOOT" + b"\x00" * ((0x200 * 8) - 9), 0)
 
     # 3) Sanity check rpmb
     log("Check rpmb")
@@ -148,13 +161,7 @@ def main():
             dev.kick_watchdog()
             time.sleep(1)
 
-    # Clear preloader so, we get into bootrom without shorting, should the script stall (we flash preloader as last step)
-    # 4) Downgrade preloader
-    log("Clear preloader header")
-    switch_boot0(dev)
-    flash_data(dev, b"EMMC_BOOT" + b"\x00" * ((0x200 * 8) - 9), 0)
-
-    # 5) Zero out rpmb to enable downgrade
+    # 4) Zero out rpmb to enable downgrade
     log("Downgrade rpmb")
     dev.rpmb_write(b"\x00" * 0x100)
     log("Recheck rpmb")
@@ -165,40 +172,42 @@ def main():
     log("rpmb downgrade ok")
     dev.kick_watchdog()
 
-    # 6) Downgrade tz
-    log("Flash tz")
+    # 6) Flash original tee to tee2
+    log("Flash tee2")
     switch_user(dev)
-    flash_binary(dev, "../bin/tz.img", gpt["tee1"][0], gpt["tee1"][1] * 0x200)
+    flash_binary(dev, "../bin/tz.img", gpt["tee2"][0], gpt["tee2"][1] * 0x200)
 
-    # 7) Downgrade lk
+    # 7) Flash original lk
     log("Flash lk")
     switch_user(dev)
     flash_binary(dev, "../bin/lk.bin", gpt["lk"][0], gpt["lk"][1] * 0x200)
 
-    # 8) Flash microloader
-    log("Inject microloader")
+    # 8) Flash kaeru
+    log("Flash kaeru")
     switch_user(dev)
-    boot_hdr1 = dev.emmc_read(gpt["boot"][0]) + dev.emmc_read(gpt["boot"][0] + 1)
-    boot_hdr2 = dev.emmc_read(gpt["boot"][0] + 2) + dev.emmc_read(gpt["boot"][0] + 3)
-    flash_binary(dev, "../bin/microloader.bin", gpt["boot"][0], 2 * 0x200)
-    if boot_hdr2[0:8] != b"ANDROID!":
-        flash_data(dev, boot_hdr1, gpt["boot"][0] + 2, 2 * 0x200)
+    flash_binary(dev, find_binary("*-kaeru.bin"), gpt["expdb"][0], gpt["expdb"][1] * 0x200)
 
-    log("Force fastboot")
-    force_fastboot(dev, gpt)
+    # 9) Flash tee w/ payload to tee1
+    log("Flash payload")
+    switch_user(dev)
+    flash_binary(dev, "../bin/tee-payload.bin", gpt["tee1"][0], gpt["tee1"][1] * 0x200)
 
-    # 9) Downgrade preloader
+    # 10) Downgrade preloader
     log("Flash preloader")
     switch_boot0(dev)
     flash_binary(dev, "../bin/preloader.img", 0)
 
-    # 10) Install lk-payload
-    log("Flash lk-payload")
-    switch_boot0(dev)
-    flash_binary(dev, "../lk-payload/build/payload.bin", 1024)
+    # 11) Force fastboot mode
+    log("Force fastboot mode")
+    force_fastboot(dev, gpt)
 
-    # 11) Reboot (to fastboot)
-    log("Reboot")
+    # 12) Wait some time so data is flushed to EMMC
+    for _ in range(5):
+        dev.kick_watchdog()
+        time.sleep(1)
+
+    # Reboot (to fastboot)
+    log("Reboot to unlocked fastboot")
     dev.reboot()
 
 

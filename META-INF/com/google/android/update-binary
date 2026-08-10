@@ -1,11 +1,16 @@
 #!/sbin/sh -x
 # amonet updater
 # Copyright (C) 2019 k4y0z @ xda-developers
-# Copyright (C) 2025 R0rt1z2
+# Copyright (C) 2025-2026 R0rt1z2
 
-PAYLOAD_BLOCK=1024
-
-PART_PREFIX=/dev/block/platform/soc
+BY_NAME_DIRS="
+/dev/block/by-name
+/dev/block/platform/soc/11230000.mmc/by-name
+/dev/block/platform/mtk-msdc.0/by-name
+/dev/block/platform/soc/by-name
+/dev/block/platform/*/by-name
+/dev/block/platform/*/*/by-name
+"
 
 # detect whether in boot mode
 getprop | grep zygote | grep -q running && bootMode=true || bootMode=false
@@ -19,6 +24,14 @@ umask 022
 
 ui_print() {
   $bootMode && echo -e "$1" || echo -e "ui_print $1\nui_print" >> /proc/self/fd/$outFD
+}
+
+show_progress() {
+  $bootMode || echo -e "progress $1 $2" >> /proc/self/fd/$outFD
+}
+
+set_progress() {
+  $bootMode || echo -e "set_progress $1" >> /proc/self/fd/$outFD
 }
 
 # not a function, but must be here
@@ -42,9 +55,60 @@ check_product() {
   product=$(grep_prop ro.product.device)
 
   if [ "$product" != "${1}" ] ; then
-    ui_print "This is only for the \"${1}\"${2}, your device is a \"${product}\""
+    ui_print "This is only for the \"${1}\"${2} your device is a \"${product}\""
     exit 1
   fi
+}
+
+abort() {
+  ui_print " "
+  ui_print "(!) $1"
+  ui_print " "
+  exit 1
+}
+
+flash_file() {
+  [ -f "$2" ] || abort "Missing $(basename "$2") - bad or incomplete zip"
+  dd if="$2" of="$3" || abort "Failed to write $1"
+}
+
+find_part() {
+  for _name in "$@"; do
+    for _dir in $BY_NAME_DIRS; do
+      if [ -e "$_dir/$_name" ]; then
+        echo "$_dir/$_name"
+        return 0
+      fi
+    done
+  done
+  return 1
+}
+
+flash_part() {
+  _label="$1"
+  _src="$2"
+  shift 2
+  [ -f "$_src" ] || abort "Missing $(basename "$_src") - bad or incomplete zip"
+  _node=$(find_part "$@") || abort "Could not find the $1 partition"
+  dd if="$_src" of="$_node" || abort "Failed to write $_label"
+}
+
+wipe_part() {
+  _label="$1"
+  shift
+  _node=$(find_part "$@")
+  if [ -z "$_node" ] || [ ! -b "$_node" ]; then
+    ui_print "  (!) no $_label partition found, skipping"
+    return 0
+  fi
+  _size=$(blockdev --getsize64 "$_node" 2>/dev/null)
+  case "$_size" in ''|*[!0-9]*) _size=0 ;; esac
+  if [ "$_size" -gt 0 ]; then
+    dd if=/dev/zero of="$_node" bs=512 count=$((_size / 512)) 2>/dev/null
+  else
+    dd if=/dev/zero of="$_node" 2>/dev/null
+  fi
+  return 0
 }
 
 ##########################################################################################
@@ -62,18 +126,16 @@ if [ "$?" -eq "0" ]; then
   outFD=0
 
   for FD in `ls /proc/$$/fd`; do
-  readlink /proc/$$/fd/$FD 2>/dev/null | grep pipe >/dev/null
-  if [ "$?" -eq "0" ]; then
-    ps | grep " 3 $FD " | grep -v grep >/dev/null
+    readlink /proc/$$/fd/$FD 2>/dev/null | grep pipe >/dev/null
     if [ "$?" -eq "0" ]; then
-    outFD=$FD
-    break
+      ps | grep " 3 $FD " | grep -v grep >/dev/null
+      if [ "$?" -eq "0" ]; then
+        outFD=$FD
+        break
+      fi
     fi
-  fi
   done
 fi
-
-check_product "checkers" " - Amazon Echo Show 5 (2019 / 1st Gen) - "
 
 TMPDIR=/dev/tmp
 INSTALLER=$TMPDIR/install
@@ -82,7 +144,14 @@ INSTALLER=$TMPDIR/install
 rm -rf $TMPDIR 2>/dev/null
 mkdir -p $INSTALLER 2>/dev/null
 
-unzip -o "$ZIP" 'amonet/bin/twrp.img' 'amonet/lk-payload/build/payload.bin' 'amonet/bin/microloader.bin' -d $INSTALLER >&2
+unzip -o "$ZIP" 'amonet/device.prop' -d $INSTALLER >&2
+[ -f ${INSTALLER}/amonet/device.prop ] || abort "Missing device.prop - bad or incomplete zip"
+. ${INSTALLER}/amonet/device.prop
+[ -n "$DEVICE" ] || abort "Bad device.prop - bad or incomplete zip"
+
+check_product "$DEVICE" "${DEVICE_DESC}"
+
+unzip -o "$ZIP" 'amonet/bin/preloader.img' 'amonet/bin/lk.bin' 'amonet/bin/tz.img' 'amonet/bin/tee-payload.bin' "amonet/bin/${DEVICE}-kaeru.bin" 'amonet/bin/twrp.img' -d $INSTALLER >&2
 
 ##########################################################################################
 # Main
@@ -91,30 +160,60 @@ unzip -o "$ZIP" 'amonet/bin/twrp.img' 'amonet/lk-payload/build/payload.bin' 'amo
 ui_print " "
 ui_print "amonet updater"
 
-ui_print "- updating TWRP"
-dd if=${INSTALLER}/amonet/bin/twrp.img of=${PART_PREFIX}/by-name/recovery
+BIN=${INSTALLER}/amonet/bin
 
-dd if=${PART_PREFIX}/by-name/recovery of=/tmp/recovery_amonet.hdr bs=512 count=2
-dd if=${PART_PREFIX}/by-name/boot of=/tmp/boot_amonet.hdr bs=512 count=2
-dd if=${PART_PREFIX}/by-name/boot of=/tmp/boot_amonet.hdr2 bs=512 count=2 skip=2
+ui_print "- Checking package"
 
-grep "ANDROID!" /tmp/boot_amonet.hdr2
-if [ $? -ne 0 ] ; then
-    ui_print "- patching boot"
-    dd if=/tmp/boot_amonet.hdr of=${PART_PREFIX}/by-name/boot bs=512 count=2 seek=2
-fi
+KAERU=${BIN}/${DEVICE}-kaeru.bin
 
-ui_print "- updating microloader"
-dd if=${INSTALLER}/amonet/bin/microloader.bin of=${PART_PREFIX}/by-name/boot bs=512 count=2
+for f in preloader.img lk.bin tz.img tee-payload.bin ${DEVICE}-kaeru.bin twrp.img; do
+  [ -s "${BIN}/$f" ] || abort "Missing or empty $f - bad or incomplete zip"
+done
 
+[ -b /dev/block/mmcblk0boot0 ] || abort "Could not find mmcblk0boot0"
+[ -e /sys/block/mmcblk0boot0/force_ro ] || abort "Could not find the boot0 force_ro switch"
+
+for p in lk_real tee2_real tee1_real expdb recovery; do
+  find_part "$p" >/dev/null || abort "Could not find the $p partition"
+done
+
+show_progress 1.0 0
+
+ui_print "- Updating preloader"
 echo 0 > /sys/block/mmcblk0boot0/force_ro
-
-ui_print "- updating payload"
-dd if=/${INSTALLER}/amonet/lk-payload/build/payload.bin of=/dev/block/mmcblk0boot0 bs=512 seek=${PAYLOAD_BLOCK}
-
+flash_file "preloader" ${BIN}/preloader.img /dev/block/mmcblk0boot0
 echo 1 > /sys/block/mmcblk0boot0/force_ro
+set_progress 0.15
 
-ui_print "- Update complete"
+ui_print "- Updating lk"
+flash_part "lk" ${BIN}/lk.bin lk_real
+set_progress 0.30
+
+ui_print "- Updating tz"
+flash_part "tz" ${BIN}/tz.img tee2_real
+set_progress 0.45
+
+ui_print "- Updating payload"
+flash_part "payload" ${BIN}/tee-payload.bin tee1_real
+flash_part "kaeru" "$KAERU" expdb
+set_progress 0.65
+
+ui_print "- Updating TWRP"
+flash_part "TWRP" ${BIN}/twrp.img recovery
+flash_part "TWRP" ${BIN}/twrp.img swdl
+set_progress 0.85
+
+wipe_part "MISC" MISC misc
+set_progress 1.00
+
+sync
+
 ui_print " "
+ui_print "- Done, device will reboot to recovery in 5s"
+sleep 5
+
+# we take advantage of the fact that when installing a ZIP, recovery
+# will remove the boot / recovery patches until the install finishes
+reboot recovery
 
 exit 0
