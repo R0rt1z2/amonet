@@ -75,7 +75,7 @@ flash_file() {
 find_part() {
   for _name in "$@"; do
     for _dir in $BY_NAME_DIRS; do
-      if [ -e "$_dir/$_name" ]; then
+      if [ -b "$_dir/$_name" ]; then
         echo "$_dir/$_name"
         return 0
       fi
@@ -200,7 +200,7 @@ set_progress 0.65
 
 ui_print "- Updating TWRP"
 flash_part "TWRP" ${BIN}/twrp.img recovery
-flash_part "TWRP" ${BIN}/twrp.img swdl
+flash_part "TWRP" ${BIN}/twrp.img swdl_real swdl
 set_progress 0.85
 
 wipe_part "MISC" MISC misc
