@@ -1,0 +1,4 @@
+[submodule "pl-payload"]
+	path = pl-payload
+	url = https://github.com/R0rt1z2/amonet-koboreru
+	branch = main
