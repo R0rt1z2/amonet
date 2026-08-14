@@ -13,6 +13,15 @@ device_desc() {
   esac
 }
 
+device_type_id() {
+  case "$1" in
+    checkers) echo "A4ZP7ZC4PI6TO" ;;
+    crown)    echo "A1Z88NGR2BK6A2" ;;
+    cronos)   echo "A1XWJRHALS1REP" ;;
+    *) return 1 ;;
+  esac
+}
+
 AVAILABLE=()
 for d in bin/*/; do
   [ -d "$d" ] || continue
@@ -42,6 +51,10 @@ for DEVICE in "${DEVICES[@]}"; do
     echo "error: unregistered device '${DEVICE}', add it to device_desc in makedist.sh" >&2
     exit 1
   fi
+  if ! device_type_id "${DEVICE}" >/dev/null; then
+    echo "error: unregistered device '${DEVICE}', add it to device_type_id in makedist.sh" >&2
+    exit 1
+  fi
 done
 
 echo "building: ${DEVICES[*]}"
@@ -58,10 +71,10 @@ for DEVICE in "${DEVICES[@]}"; do
   cp bin/${DEVICE}/{preloader.img,lk.bin,tz.img,tee-payload.bin,${DEVICE}-kaeru.bin,twrp.img} ${OUT}/unlock/amonet/bin/
 
   mkdir -p ${OUT}/unlock/amonet/modules
-  cp modules/{common.py,handshake.py,handshake2.py,load_payload.py,logger.py,main.py} ${OUT}/unlock/amonet/modules/
+  cp modules/{common.py,gpt.py,handshake.py,handshake2.py,load_payload.py,logger.py,main.py} ${OUT}/unlock/amonet/modules/
 
   mkdir -p ${OUT}/unlock/amonet/brom-payload/build
-  cp brom-payload/build/payload.bin ${OUT}/unlock/amonet/brom-payload/build/
+  cp brom-payload/build/{payload.bin,pl.bin} ${OUT}/unlock/amonet/brom-payload/build/
 
   cp {bootrom-step.sh,fastboot-step.sh,boot-fastboot.sh,boot-recovery.sh} ${OUT}/unlock/amonet/
   chmod +x ${OUT}/unlock/amonet/*.sh
@@ -69,7 +82,7 @@ for DEVICE in "${DEVICES[@]}"; do
   mkdir -p ${OUT}/unlock/META-INF/com/google/android
   cp META-INF/com/google/android/{update-binary,updater-script} ${OUT}/unlock/META-INF/com/google/android/
 
-  printf 'DEVICE=%s\nDEVICE_DESC="%s"\n' "${DEVICE}" "${DEVICE_DESC}" > ${OUT}/unlock/amonet/device.prop
+  printf 'DEVICE=%s\nDEVICE_DESC="%s"\nDEVICE_TYPE_ID=%s\n' "${DEVICE}" "${DEVICE_DESC}" "$(device_type_id "${DEVICE}")" > ${OUT}/unlock/amonet/device.prop
 
   mkdir -p ${OUT}/gptfix/amonet/bin
   cp gpt-fix.sh ${OUT}/gptfix/amonet/

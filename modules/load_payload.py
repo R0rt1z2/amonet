@@ -92,6 +92,30 @@ class UserInputThread(threading.Thread):
         self.done = True
 
 
+def read_payload(path):
+    with open(path, "rb") as fin:
+        payload = fin.read()
+    log("Load payload from {} = 0x{:X} bytes".format(path, len(payload)))
+    while len(payload) % 4 != 0:
+        payload += b"\x00"
+
+    return payload
+
+
+def load_pl_payload(dev, path):
+    payload = read_payload(path)
+
+    log("Send payload")
+    dev.send_da(0x40001000, len(payload), 0, payload)
+
+    log("Let's rock")
+    dev.jump_da(0x40001000)
+
+    log("Wait for the payload to come online...")
+    dev.wait_payload()
+    log("all good")
+
+
 def load_payload(dev, path):
     thread = UserInputThread()
     thread.start()
@@ -111,11 +135,7 @@ def load_payload(dev, path):
     log("Disable bootrom range checks")
     aes_write16(dev, 0x102868, bytes.fromhex("00000000000000000000000080000000"))
 
-    with open(path, "rb") as fin:
-        payload = fin.read()
-    log("Load payload from {} = 0x{:X} bytes".format(path, len(payload)))
-    while len(payload) % 4 != 0:
-        payload += b"\x00"
+    payload = read_payload(path)
 
     words = []
     for x in range(len(payload) // 4):

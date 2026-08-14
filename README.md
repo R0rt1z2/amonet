@@ -18,4 +18,6 @@ This is an exploit chain for some models of the Amazon Echo Show. It contains a 
 
 `modules` is licensed under MIT.
 
+`idmetool` is dual-licensed under BSD-3-Clause or GPLv2+; the payloads link it under the latter.
+
 See LICENSE.MIT and LICENSE.GPL2 for more details.

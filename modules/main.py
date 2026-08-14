@@ -6,8 +6,76 @@ import time
 
 from common import Device
 from handshake import handshake
-from load_payload import load_payload, UserInputThread
+from gpt import parse_gpt_compat
+from load_payload import load_payload, load_pl_payload, UserInputThread
 from logger import log
+
+DEVICES = {
+    "A4ZP7ZC4PI6TO":  ("checkers", "Amazon Echo Show 5 (2019 / 1st Gen)"),
+    "A1Z88NGR2BK6A2": ("crown",    "Amazon Echo Show 8 (2019 / 1st Gen)"),
+    "A1XWJRHALS1REP": ("cronos",   "Amazon Echo Show 5 (2021 / 2nd Gen)"),
+}
+
+def check_brom(dev):
+    devinfo = struct.unpack("<I", dev.mem_read(0x10206060, 4))[0]
+    disabled = (devinfo >> 8) & 1
+
+    log("BROM USBDL is {}".format("disabled" if disabled else "enabled"))
+
+    return not disabled
+
+def warn_and_continue(dev, msg):
+    thread = UserInputThread(msg = msg + "; if this is expected press enter, otherwise terminate with Ctrl+C")
+    thread.start()
+    while not thread.done:
+        dev.kick_watchdog()
+        time.sleep(1)
+
+def device_name(device_type_id):
+    if device_type_id not in DEVICES:
+        return "an unknown device ({})".format(device_type_id)
+
+    codename, model = DEVICES[device_type_id]
+
+    return "{} - ({})".format(model, codename)
+
+def read_device_prop(path = "../device.prop"):
+    props = dict()
+
+    try:
+        with open(path) as fin:
+            for line in fin:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                props[key.strip()] = value.strip().strip('"')
+    except IOError:
+        pass
+
+    return props
+
+def identify_device(dev):
+    expected = read_device_prop().get("DEVICE_TYPE_ID")
+
+    device_type_id = dev.idme_read(b"device_type_id")
+    if device_type_id is None:
+        warn_and_continue(dev, "there is no device_type_id in IDME, so this might not be a device we support")
+        return None
+
+    device_type_id = device_type_id.rstrip(b"\x00").decode("utf-8")
+
+    if expected and device_type_id != expected:
+        raise RuntimeError("this package is for {}, but this is {}, refusing to flash it".format(device_name(expected), device_name(device_type_id)))
+
+    if device_type_id not in DEVICES:
+        warn_and_continue(dev, "unknown device (device_type_id = {}), flashing it could brick it".format(device_type_id))
+        return None
+
+    codename, model = DEVICES[device_type_id]
+    log("Detected {}".format(device_name(device_type_id)))
+
+    return codename
 
 def check_modemmanager():
     pids = [pid for pid in os.listdir('/proc') if pid.isdigit()]
@@ -102,19 +170,17 @@ def switch_user(dev):
     dev.kick_watchdog()
 
 def parse_gpt(dev):
-    data = dev.emmc_read(0x400 // 0x200) + dev.emmc_read(0x600 // 0x200) + dev.emmc_read(0x800 // 0x200) + dev.emmc_read(0xA00 // 0x200)
-    num = len(data) // 0x80
-    parts = dict()
-    for x in range(num):
-        part = data[x * 0x80:(x + 1) * 0x80]
-        part_name = part[0x38:].decode("utf-16le").rstrip("\x00")
-        part_start = struct.unpack("<Q", part[0x20:0x28])[0]
-        part_end = struct.unpack("<Q", part[0x28:0x30])[0]
-        parts[part_name] = (part_start, part_end - part_start + 1)
+    data = b""
+    for block in range(1, 34):
+        data += dev.emmc_read(block)
+        if block % 10 == 0:
+            dev.kick_watchdog()
+
+    parts, _, _ = parse_gpt_compat(data)
+
     return parts
 
 def main():
-
     check_modemmanager()
 
     dev = Device()
@@ -123,8 +189,16 @@ def main():
     # 0.1) Handshake
     handshake(dev)
 
-    # 0.2) Load brom payload
-    load_payload(dev, "../brom-payload/build/payload.bin")
+    # 0.2) Load the payload, the way we get it in depends on where we are
+    if dev.preloader:
+        load_pl_payload(dev, "../brom-payload/build/pl.bin")
+    else:
+        load_payload(dev, "../brom-payload/build/payload.bin")
+    dev.kick_watchdog()
+
+    # 0.3) Figure out what we are talking to
+    identify_device(dev)
+    check_brom(dev)
     dev.kick_watchdog()
 
     if len(sys.argv) == 2 and sys.argv[1] == "fixgpt":
@@ -138,7 +212,6 @@ def main():
 
     # 1.1) Parse gpt
     gpt = parse_gpt(dev)
-    log("gpt_parsed = {}".format(gpt))
     for part in ("lk", "tee1", "tee2", "expdb", "MISC"):
         if part not in gpt:
             raise RuntimeError("bad gpt, missing {}".format(part))
@@ -148,18 +221,15 @@ def main():
     switch_boot0(dev)
 
     # 2.1) Clear preloader so, we get into bootrom without shorting, should the script stall (we flash preloader as last step)
-    log("Clear preloader header")
-    flash_data(dev, b"EMMC_BOOT" + b"\x00" * ((0x200 * 8) - 9), 0)
+    if not dev.preloader:
+        log("Clear preloader header")
+        flash_data(dev, b"EMMC_BOOT" + b"\x00" * ((0x200 * 8) - 9), 0)
 
     # 3) Sanity check rpmb
     log("Check rpmb")
     rpmb = dev.rpmb_read()
     if rpmb[0:4] != b"AMZN":
-        thread = UserInputThread(msg = "rpmb looks broken; if this is expected (i.e. you're retrying the exploit) press enter, otherwise terminate with Ctrl+C")
-        thread.start()
-        while not thread.done:
-            dev.kick_watchdog()
-            time.sleep(1)
+        warn_and_continue(dev, "rpmb looks broken (i.e. you're retrying the exploit)")
 
     # 4) Zero out rpmb to enable downgrade
     log("Downgrade rpmb")
@@ -193,9 +263,10 @@ def main():
     flash_binary(dev, "../bin/tee-payload.bin", gpt["tee1"][0], gpt["tee1"][1] * 0x200)
 
     # 10) Downgrade preloader
-    log("Flash preloader")
-    switch_boot0(dev)
-    flash_binary(dev, "../bin/preloader.img", 0)
+    if not dev.preloader:
+        log("Flash preloader")
+        switch_boot0(dev)
+        flash_binary(dev, "../bin/preloader.img", 0)
 
     # 11) Force fastboot mode
     log("Force fastboot mode")

@@ -5,6 +5,7 @@
 #include "mmc.h"
 #include "errno.h"
 #include "mt_sd.h"
+#include "timer.h"
 #include "../crypto/hmac-sha256.h"
 
 #define be32_to_cpup(addr) __builtin_bswap32(*(uint32_t*)addr)
@@ -13,7 +14,6 @@
 #define cpu_to_be32p be32_to_cpup
 
 unsigned int msdc_cmd(struct msdc_host *host, struct mmc_command *cmd);
-void sleepy(void);
 void hex_dump(const void* data, size_t size);
 
 int mmc_go_idle(struct msdc_host *host)
@@ -75,8 +75,7 @@ int mmc_send_op_cond(struct msdc_host *host, u32 ocr, u32 *rocr)
 
         err = -ETIMEDOUT;
 
-        // mmc_delay(10);
-        sleepy(); // TODO
+        mdelay(10);
     }
 
     if (rocr)
@@ -1001,9 +1000,9 @@ int mmc_init(struct msdc_host *host) {
     host->blksz = 0x200;
 
     sdr_set_bits(MSDC_CFG, MSDC_CFG_PIO);
-    sleepy();
+    mdelay(10);
     sdr_write32(MSDC_CFG, sdr_read32(MSDC_CFG) | 0x1000);
-    sleepy();
+    mdelay(10);
     printf("MSDC_CFG: 0x%08X\n", sdr_read32(MSDC_CFG));
 
     ret = mmc_go_idle(host);
