@@ -493,6 +493,7 @@ int mmc_init(struct msdc_host *host);
 int mmc_read(struct msdc_host *host, uint32_t blk, void *buf);
 int mmc_write(struct msdc_host *host, uint32_t blk, void *buf);
 int mmc_set_part(struct msdc_host *host, int part);
+int mmc_enable_8bit(struct msdc_host *host);
 int mmc_rpmb_read(struct msdc_host *host, void *buf);
 int mmc_rpmb_write(struct msdc_host *host, void *buf);
 void msdc_set_blknum(struct msdc_host *host, u32 blknum);

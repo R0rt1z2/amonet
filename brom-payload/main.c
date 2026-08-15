@@ -22,5 +22,7 @@ int main() {
 
     mmc_init(&host);
 
+    mmc_enable_8bit(&host);
+
     command_loop(&host);
 }
