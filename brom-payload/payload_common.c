@@ -5,6 +5,10 @@
 
 static uint8_t idme_buf[IDME_SIZE];
 
+#define WRITE_BLOCKS_MAX    64
+
+static uint8_t write_buf[WRITE_BLOCKS_MAX * 0x200];
+
 void hex_dump(const void* data, size_t size) {
     size_t i, j;
     for (i = 0; i < size; ++i) {
@@ -85,6 +89,26 @@ void command_loop(struct msdc_host *host) {
             memset(buf, 0, sizeof(buf));
             recv_data(buf, 0x200, 0);
             if (mmc_write(host, block, buf) != 0) {
+                printf("Write error!\n");
+            } else {
+                printf("OK\n");
+                send_dword(0xD0D0D0D0);
+            }
+            break;
+        }
+        case 0x1003: {
+            uint32_t block = recv_dword();
+            uint32_t blocks = recv_dword();
+
+            if (blocks == 0 || blocks > WRITE_BLOCKS_MAX) {
+                printf("Refusing to write 0x%08X blocks\n", blocks);
+                break;
+            }
+
+            printf("Write 0x%08X blocks at 0x%08X ", blocks, block);
+            recv_data(write_buf, blocks * 0x200, 0);
+
+            if (mmc_write_blocks(host, block, write_buf, blocks) != 0) {
                 printf("Write error!\n");
             } else {
                 printf("OK\n");

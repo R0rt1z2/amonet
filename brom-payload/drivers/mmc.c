@@ -171,6 +171,36 @@ int mmc_write(struct msdc_host *host, uint32_t blk, void *buf)
     return msdc_pio_write(host, buf);
 }
 
+int mmc_write_blocks(struct msdc_host *host, uint32_t blk, void *buf, uint32_t blocks)
+{
+    int err;
+    struct mmc_command sbc = { 0 };
+    struct mmc_command cmd = { 0 };
+
+    if (blocks <= 1)
+        return mmc_write(host, blk, buf);
+
+    sbc.opcode = MMC_SET_BLOCK_COUNT;
+    sbc.arg = blocks;
+    sbc.flags = MMC_RSP_R1 | MMC_CMD_AC;
+
+    err = msdc_cmd(host, &sbc);
+    if (err)
+        return err;
+
+    msdc_set_blknum(host, blocks);
+
+    cmd.opcode = MMC_WRITE_MULTIPLE_BLOCK;
+    cmd.arg = blk;
+    cmd.flags = MMC_RSP_R1 | MMC_CMD_ADTC;
+
+    err = msdc_cmd(host, &cmd);
+    if (err)
+        return err;
+
+    return msdc_pio_write_multi(host, buf, blocks);
+}
+
 int mmc_send_status(struct msdc_host *host, u32 *status)
 {
     int err;

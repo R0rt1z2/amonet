@@ -11,6 +11,8 @@ from logger import log
 BAUD = 115200
 TIMEOUT = 5
 
+BLOCKS_PER_WRITE = 64
+
 
 CRYPTO_BASE = 0x10210000 # for karnak
 
@@ -293,6 +295,31 @@ class Device:
         self.dev.write(p32_be(0x1001))
         # block to write
         self.dev.write(p32_be(idx))
+        # data
+        self.dev.write(data)
+
+        code = self.dev.read(4)
+        if code != b"\xd0\xd0\xd0\xd0":
+            raise RuntimeError("device failure")
+
+    def emmc_write_blocks(self, idx, data):
+        if len(data) % 0x200 != 0:
+            raise RuntimeError("data must be a whole number of blocks")
+
+        blocks = len(data) // 0x200
+        if blocks < 1 or blocks > BLOCKS_PER_WRITE:
+            raise RuntimeError("can only write 1 to {} blocks at a time".format(BLOCKS_PER_WRITE))
+
+        if self.preloader and self.part == 1:
+            raise RuntimeError("refusing to write to boot0 in preloader mode")
+
+        # magic
+        self.dev.write(p32_be(0xf00dd00d))
+        # cmd
+        self.dev.write(p32_be(0x1003))
+        # block to write
+        self.dev.write(p32_be(idx))
+        self.dev.write(p32_be(blocks))
         # data
         self.dev.write(data)
 
