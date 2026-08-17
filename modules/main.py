@@ -4,11 +4,11 @@ import os
 import sys
 import time
 
-from common import Device
+from common import BLOCKS_PER_WRITE, Device
 from handshake import handshake
-from load_payload import load_payload, UserInputThread
+from load_payload import load_payload, load_pl_payload, UserInputThread
 from logger import log
-from gpt import parse_gpt_compat, generate_gpt, modify_step1, modify_step2, parse_gpt as gpt_parse_gpt
+from gpt import parse_gpt_compat, generate_gpt, unpatch, parse_gpt as gpt_parse_gpt
 
 def check_modemmanager():
     pids = [pid for pid in os.listdir('/proc') if pid.isdigit()]
@@ -38,11 +38,29 @@ def flash_data(dev, data, start_block, max_size=0):
         raise RuntimeError("data too big to flash")
 
     blocks = len(data) // 0x200
-    for x in range(blocks):
-        print("[{} / {}]".format(x + 1, blocks), end='\r')
-        dev.emmc_write(start_block + x, data[x * 0x200:(x + 1) * 0x200])
-        if x % 10 == 0:
-            dev.kick_watchdog()
+    multi = True
+    x = 0
+
+    while x < blocks:
+        run = min(BLOCKS_PER_WRITE, blocks - x)
+        chunk = data[x * 0x200:(x + run) * 0x200]
+
+        if multi:
+            dev.emmc_write_blocks(start_block + x, chunk)
+
+            if x == 0:
+                written = b"".join(dev.emmc_read(start_block + i) for i in range(run))
+                if written != chunk:
+                    log("multi block write did not read back, falling back to single blocks")
+                    multi = False
+                    continue
+        else:
+            for i in range(run):
+                dev.emmc_write(start_block + x + i, chunk[i * 0x200:(i + 1) * 0x200])
+
+        x += run
+        print("[{} / {}]".format(x, blocks), end='\r', flush=True)
+        dev.kick_watchdog()
     print("")
 
 def flash_binary(dev, path, start_block, max_size=0):
@@ -96,8 +114,11 @@ def main():
     # 0.1) Handshake
     handshake(dev)
 
-    # 0.2) Load brom payload
-    load_payload(dev, "../brom-payload/build/payload.bin")
+    # 0.2) Load the payload, the way we get it in depends on where we are
+    if dev.preloader:
+        load_pl_payload(dev, "../brom-payload/build/pl.bin")
+    else:
+        load_payload(dev, "../brom-payload/build/payload.bin")
     dev.kick_watchdog()
 
     if len(sys.argv) == 2 and sys.argv[1] == "fixgpt":
@@ -115,16 +136,11 @@ def main():
     if "lk" not in gpt or "tee1" not in gpt or "boot" not in gpt or "recovery" not in gpt:
         raise RuntimeError("bad gpt")
 
-    if "boot_x" not in gpt or "recovery_x" not in gpt:
-        log("Modify GPT")
+    if "boot_x" in gpt or "recovery_x" in gpt:
+        log("Restore GPT")
 
-        if "boot_tmp" not in gpt and "recovery_tmp" not in gpt:
-            part_list_mod1 = modify_step1(part_list)
-        else:
-            part_list_mod1 = part_list
-
-        part_list_mod2 = modify_step2(part_list_mod1)
-        primary, backup = generate_gpt(gpt_header, part_list_mod2)
+        part_list_restored = unpatch(gpt_header, part_list)
+        primary, backup = generate_gpt(gpt_header, part_list_restored)
 
         log("Validate GPT")
         gpt_header, part_list = gpt_parse_gpt(bytes(primary))
@@ -137,7 +153,7 @@ def main():
 
         gpt, gpt_header, part_list = parse_gpt(dev)
         #log("gpt_parsed = {}".format(gpt))
-        if "boot_x" not in gpt or "recovery_x" not in gpt:
+        if "boot_x" in gpt or "recovery_x" in gpt:
             raise RuntimeError("bad gpt")
 
     # 2) Sanity check boot0
@@ -154,12 +170,6 @@ def main():
             dev.kick_watchdog()
             time.sleep(1)
 
-    # Clear preloader so, we get into bootrom without shorting, should the script stall (we flash preloader as last step)
-    # 4) Downgrade preloader
-    log("Clear preloader header")
-    switch_boot0(dev)
-    flash_data(dev, b"EMMC_BOOT" + b"\x00" * ((0x200 * 8) - 9), 0)
-
     # 5) Zero out rpmb to enable downgrade
     log("Downgrade rpmb")
     dev.rpmb_write(b"\x00" * 0x100)
@@ -171,42 +181,36 @@ def main():
     log("rpmb downgrade ok")
     dev.kick_watchdog()
 
-    # 6) Install preloader
-    log("Flash preloader")
-    switch_boot0(dev)
-    flash_binary(dev, "../bin/preloader.bin", 8)
-    flash_binary(dev, "../bin/preloader.bin", 520)
-
-    # 7) Downgrade tz
-    log("Flash tz")
+    # 7) Flash original tee to tee2
+    log("Flash tee2")
     switch_user(dev)
-    flash_binary(dev, "../bin/tz.img", gpt["tee1"][0], gpt["tee1"][1] * 0x200)
+    flash_binary(dev, "../bin/tz.img", gpt["tee2"][0], gpt["tee2"][1] * 0x200)
 
     # 8) Downgrade lk
     log("Flash lk")
     switch_user(dev)
     flash_binary(dev, "../bin/lk.bin", gpt["lk"][0], gpt["lk"][1] * 0x200)
 
-    # 9) Flash payload
-    log("Inject payload")
+    # 9) Flash kaeru
+    log("Flash kaeru")
     switch_user(dev)
-    flash_binary(dev, "../bin/boot.hdr", gpt["boot"][0], gpt["boot"][1] * 0x200)
-    flash_binary(dev, "../bin/boot.payload", gpt["boot"][0] + 223223, (gpt["boot"][1] * 0x200) - (223223 * 0x200))
-    
+    flash_binary(dev, "../bin/rook-kaeru.bin", gpt["expdb"][0], gpt["expdb"][1] * 0x200)
+
+    # 10) Flash tee w/ payload to tee1
+    log("Flash payload")
     switch_user(dev)
-    flash_binary(dev, "../bin/boot.hdr", gpt["recovery"][0], gpt["recovery"][1] * 0x200)
-    flash_binary(dev, "../bin/boot.payload", gpt["recovery"][0] + 223223, (gpt["recovery"][1] * 0x200) - (223223 * 0x200))
+    flash_binary(dev, "../bin/tee-payload.bin", gpt["tee1"][0], gpt["tee1"][1] * 0x200)
+
+    # 11) Downgrade preloader
+    if not dev.preloader:
+        log("Flash preloader")
+        switch_boot0(dev)
+        flash_binary(dev, "../bin/preloader.img", 0)
 
     log("Force fastboot")
     force_fastboot(dev, gpt)
 
-    # 10) Downgrade preloader
-    log("Flash preloader header")
-    switch_boot0(dev)
-    flash_binary(dev, "../bin/preloader.hdr0", 0, 4)
-    flash_binary(dev, "../bin/preloader.hdr1", 4, 4)
-
-    # 10.1) Wait some time so data is flushed to EMMC
+    # 11.1) Wait some time so data is flushed to EMMC
     time.sleep(5)
 
     # Reboot (to fastboot)

@@ -2,14 +2,11 @@
 
 set -e
 
-echo "Your device will be reset to factory defaults..."
 echo "Press Enter to Continue..."
 read
 
-fastboot flash recovery_x bin/twrp.img
-fastboot erase userdata
-fastboot flash MISC bin/boot-recovery.bin
-fastboot reboot
+fastboot flash recovery bin/twrp.img
+fastboot reboot recovery
 
 echo ""
 echo "Your device will now reboot into TWRP."

@@ -179,6 +179,52 @@ int msdc_pio_read(struct msdc_host *host, void *buf)
    which means, memory card block read/write won't using pio
    then don't need to handle the CMD12 when data error. 
 */
+int msdc_pio_write_multi(struct msdc_host* host, void *buf, u32 blocks)
+{
+    u32  wints = MSDC_INTEN_DATTMO | MSDC_INTEN_DATCRCERR | MSDC_INTEN_XFER_COMPL;
+    u32 *ptr = buf;
+    u32  left = blocks * 0x200;
+    uint32_t error = 0;
+    u32  ints = 0;
+
+    sdr_clr_bits(MSDC_INTEN, wints);
+
+    while (1) {
+        ints = sdr_read32(MSDC_INT);
+        ints &= wints;
+        sdr_write32(MSDC_INT, ints);
+
+        if (ints & MSDC_INT_DATTMO) {
+            error = (unsigned int)-ETIMEDOUT;
+            msdc_reset_hw(host->id);
+            break;
+        } else if (ints & MSDC_INT_DATCRCERR) {
+            error = (unsigned int)-EIO;
+            msdc_reset_hw(host->id);
+            break;
+        } else if (ints & MSDC_INT_XFER_COMPL) {
+            if (left == 0)
+                break;
+        }
+
+        if (left == 0)
+            continue;
+
+        if (msdc_txfifocnt() == 0) {
+            u32 count = (left >= MSDC_FIFO_SZ ? MSDC_FIFO_SZ : left) >> 2;
+            while (count--) {
+                msdc_fifo_write32(*ptr); ptr++;
+                left -= 4;
+            }
+        }
+    }
+
+    if (error)
+        ERR_MSG("write pio data->error<%d>\n", error);
+
+    return error;
+}
+
 int msdc_pio_write(struct msdc_host* host, void *buf)
 {
     u32  num = 1;
