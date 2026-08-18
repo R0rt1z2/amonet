@@ -138,64 +138,6 @@ class Device:
         self.dev.write(command)
         self.dev.flushInput()
 
-    def read32(self, addr, size=1):
-        result = []
-
-        self.dev.write(b'\xd1')
-        self.check(self.dev.read(1), b'\xd1') # echo cmd
-
-        self.dev.write(struct.pack('>I', addr))
-        self.check_int(self.dev.read(4), addr) # echo addr
-
-        self.dev.write(struct.pack('>I', size))
-        self.check_int(self.dev.read(4), size) # echo size
-
-        self.check(self.dev.read(2), b'\x00\x00') # arg check
-
-        for _ in range(size):
-            data = struct.unpack('>I', self.dev.read(4))[0]
-            result.append(data)
-
-        self.check(self.dev.read(2), b'\x00\x00') # status
-
-        # support scalar
-        if len(result) == 1:
-            return result[0]
-        else:
-            return result
-
-    def write32(self, addr, words, status_check=True):
-        # support scalar
-        if not isinstance(words, list):
-            words = [ words ]
-
-        self.dev.write(b'\xd4')
-        self.check(self.dev.read(1), b'\xd4') # echo cmd
-
-        self.dev.write(struct.pack('>I', addr))
-        self.check_int(self.dev.read(4), addr) # echo addr
-
-        self.dev.write(struct.pack('>I', len(words)))
-        self.check_int(self.dev.read(4), len(words)) # echo size
-
-        self.check(self.dev.read(2), b'\x00\x01') # arg check
-
-        for word in words:
-            self.dev.write(struct.pack('>I', word))
-            self.check_int(self.dev.read(4), word) # echo word
-
-        if status_check:
-            self.check(self.dev.read(2), b'\x00\x01') # status
-
-    def run_ext_cmd(self, cmd):
-        self.dev.write(b'\xC8')
-        self.check(self.dev.read(1), b'\xC8') # echo cmd
-        cmd = bytes([cmd])
-        self.dev.write(cmd)
-        self.check(self.dev.read(1), cmd)
-        self.dev.read(1)
-        self.dev.read(2)
-
     def wait_payload(self):
         data = self.dev.read(4)
         if data != b"\xB1\xB2\xB3\xB4":
@@ -373,10 +315,3 @@ class Device:
 
         self.check(self.read(2), to_bytes(0, 2))
 
-    def crash_pl(self):
-        try:
-            payload = b'\x00\x01\x9F\xE5\x10\xFF\x2F\xE1' + b'\x00' * 0x110
-            self.send_da(0, len(payload), 0, payload)
-            self.jump_da(0)
-        except RuntimeError as e:
-            log(e)

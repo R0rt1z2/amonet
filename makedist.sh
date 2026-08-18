@@ -8,12 +8,6 @@ cp bin/{preloader.img,lk.bin,tz.img,twrp.img} dist/unlock/kamakiri/bin/
 mkdir -p dist/unlock/kamakiri/modules
 cp modules/{common.py,load_payload.py,logger.py,main.py,functions.py,handshake2.py} dist/unlock/kamakiri/modules/
 
-mkdir -p dist/unlock/kamakiri/brom-payload/stage1
-cp brom-payload/stage1/stage1.bin dist/unlock/kamakiri/brom-payload/stage1/
-
-mkdir -p dist/unlock/kamakiri/brom-payload/stage2
-cp brom-payload/stage2/stage2.bin dist/unlock/kamakiri/brom-payload/stage2/
-
 mkdir -p dist/unlock/kamakiri/brom-payload/pl
 cp brom-payload/pl/pl.bin dist/unlock/kamakiri/brom-payload/pl/
 

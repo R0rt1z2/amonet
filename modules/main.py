@@ -5,11 +5,8 @@ import time
 
 from common import Device
 from logger import log
-from load_payload import load_payload, load_pl_payload
+from load_payload import load_pl_payload
 from functions import *
-
-import usb.core
-import usb.util
 
 import ctypes
 
@@ -21,10 +18,10 @@ import os
 
 def prepare(dev):
 
-    if dev.preloader:
-        load_pl_payload(dev)
-    else:
-        load_payload(dev)
+    if not dev.preloader:
+        raise RuntimeError("device is not in preloader mode")
+
+    load_pl_payload(dev)
 
     device_type_id = dev.idme_read(b"device_type_id").rstrip(b"\x00").decode("utf-8")
 
@@ -128,12 +125,6 @@ def main(dev):
     log("Force fastboot")
     force_fastboot(dev, gpt)
 
-    if not dev.preloader:
-        # 9) Install preloader
-        log("Flash preloader")
-        switch_boot0(dev)
-        flash_binary(dev, "../bin/preloader.img", 0)
-
     # 9.1) Wait some time so data is flushed to EMMC
     time.sleep(5)
 
@@ -146,7 +137,7 @@ if __name__ == "__main__":
 
     check_modemmanager()
 
-    args = [arg for arg in sys.argv[1:] if arg != "crash"]
+    args = sys.argv[1:]
 
     if args and args[0] in ("flash", "read"):
         if len(args) != 3:
@@ -158,15 +149,6 @@ if __name__ == "__main__":
 
     dev = Device()
     dev.find_device()
-
-    if "crash" in sys.argv[1:]:
-        while dev.preloader:
-            log("Found device in preloader mode, trying to crash...")
-            dev.handshake()
-            dev.crash_pl()
-            dev.dev.close()
-            dev = Device()
-            dev.find_device()
 
     if args and args[0] == "flash":
         flash_partition(dev, args[1], args[2])
