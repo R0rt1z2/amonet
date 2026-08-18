@@ -1,6 +1,10 @@
 #include "common.h"
 #include "payload_common.h"
 
+#include "idmelib.h"
+
+static uint8_t idme_buf[IDME_SIZE];
+
 #define WRITE_BLOCKS_MAX    64
 
 static uint8_t write_buf[WRITE_BLOCKS_MAX * 0x200];
@@ -42,6 +46,30 @@ void hex_dump(const void* data, size_t size) {
             }
         }
     }
+}
+
+static struct idme *read_idme(struct msdc_host *host) {
+    struct idme *idme = 0;
+
+    printf("Switch to boot1 => ");
+    printf("0x%08X\n", mmc_set_part(host, 2));
+    mdelay(500);
+
+    for (uint32_t block = 0; block < IDME_NUM_BLOCKS; block++) {
+        if (mmc_read(host, block, idme_buf + block * IDME_MMC_BLOCK_SIZE) != 0) {
+            printf("Read error!\n");
+            goto out;
+        }
+    }
+
+    idme = (struct idme *)idme_buf;
+
+out:
+    printf("Switch back to user => ");
+    printf("0x%08X\n", mmc_set_part(host, 0));
+    mdelay(500);
+
+    return idme;
 }
 
 void command_loop(struct msdc_host *host) {
@@ -134,64 +162,46 @@ void command_loop(struct msdc_host *host) {
             break;
         }
         case 0x7000: {
-            char idme_buf[0x400] = { 0 };
-            char field_name[16] = { 0 };
-            const char beefdeed[] = "beefdeed";
-            uint32_t result = 0;
-            recv_data(field_name, 16, 0);
-            printf("Read %s from IDME\n", field_name);
-            printf("Switch to partition %d => ", 2);
-            ret = mmc_set_part(host, 2);
-            printf("0x%08X\n", ret);
-            mdelay(500); // just in case
-            uint32_t block = 0;
-            void *type_offset = 0;
-            while (!(type_offset = memmem(idme_buf, 0x400, &field_name, 16)) && block < 0x2000) {
-                printf("Read block 0x%08X\n", block);
-                memset(buf, 0, sizeof(buf));
-                if (mmc_read(host, block++, buf) != 0) {
-                    printf("Read error!\n");
-                    result = 0xffffffff;
-                    break;
-                }
-                if (block == 1 && memcmp(buf, &beefdeed, 8)) {
-                    printf("IDME invalid!\n");
-                    result = 0xbeefdeed;
-                    break;
-                }
-                memcpy(idme_buf, idme_buf + 0x200, 0x200);
-                memcpy(idme_buf + 0x200, buf, 0x200);
-            }
-            if (type_offset) {
-                uint32_t len = *(uint32_t*)(type_offset + 16);
-                type_offset += 16 + 12;
-                uint32_t buf_len = sizeof(idme_buf) - (type_offset - (void *)idme_buf);
-                send_dword(len);
-                send_data(type_offset, len < buf_len ? len : buf_len);
-                if(len > buf_len) {
-                    len -= buf_len;
-                    while (len > 0) {
-                        printf("Read block 0x%08X\n", block);
-                        memset(buf, 0, sizeof(buf));
-                        if (mmc_read(host, block++, buf) != 0) {
-                            printf("Read error!\n");
-                            result = 0xffffffff;
-                            break;
-                        }
-                        else {
-                            send_data(buf, len < sizeof(buf) ? len : sizeof(buf));
-                            len -= len < sizeof(buf) ? len : sizeof(buf);
-                        }
-                    }
-                }
-            }
-            else if (!result){
-                result = 0xdeadbeef;
-            }
-            if (result) {
+            char name[IDME_MAX_NAME_LEN] = { 0 };
+            struct idme_item *item;
+            struct idme *idme;
+            uint32_t size;
+
+            recv_data(name, sizeof(name), 0);
+            printf("Read %s from IDME\n", name);
+
+            idme = read_idme(host);
+            if (!idme) {
                 send_dword(4);
-                send_dword(result);
+                send_dword(0xFFFFFFFF);
+                break;
             }
+
+            if (!idmelib_magic_valid(idme)) {
+                printf("IDME invalid!\n");
+                send_dword(4);
+                send_dword(0xBEEFDEED);
+                break;
+            }
+
+            item = idmelib_get_item(idme, name);
+            if (!item) {
+                printf("%s not found in IDME\n", name);
+                send_dword(4);
+                send_dword(0xDEADBEEF);
+                break;
+            }
+
+            size = item->desc.size;
+            if (size > sizeof(buf)) {
+                printf("%s is 0x%08X bytes, truncating\n", name, size);
+                size = sizeof(buf);
+            }
+
+            memset(buf, 0, sizeof(buf));
+            memcpy(buf, item->data, size);
+            send_dword(size);
+            send_data(buf, (size + 3) & ~3);
             break;
         }
         case 0x3000: {

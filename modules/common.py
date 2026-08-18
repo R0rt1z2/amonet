@@ -299,25 +299,30 @@ class Device:
         return data
 
     def idme_read(self, field_name):
+        if len(field_name) > 16:
+            raise RuntimeError("field name must be at most 16 bytes")
+
         # magic
         self.dev.write(p32_be(0xf00dd00d))
         # cmd
         self.dev.write(p32_be(0x7000))
+        self.dev.write(field_name + b"\x00" * (16 - len(field_name)))
 
-        if len(field_name) < 16:
-            field_name += b"\x00" * (16 - len(field_name))
-        self.dev.write(field_name)
+        size = struct.unpack('>I', self.dev.read(4))[0]
 
-        size = int.from_bytes(self.dev.read(4), byteorder="big")
-        data = self.dev.read(size)
-        if len(data) != size or data == to_bytes(0xffffffff, 4):
+        data = self.dev.read((size + 3) & ~3)
+        if len(data) != ((size + 3) & ~3):
+            raise RuntimeError("read fail")
+        data = data[:size]
+
+        if data == p32_be(0xffffffff):
             raise RuntimeError("read fail")
 
-        elif data == to_bytes(0xbeefdeed, 4):
+        elif data == p32_be(0xbeefdeed):
             raise RuntimeError("IDME invalid")
 
-        elif data == to_bytes(0xdeadbeef, 4):
-            log(field_name + " not found in IDME")
+        elif data == p32_be(0xdeadbeef):
+            log("{} not found in IDME".format(field_name))
             return None
 
         return data

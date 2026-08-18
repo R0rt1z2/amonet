@@ -3,7 +3,10 @@ AS := arm-none-eabi-as
 LD := arm-none-eabi-gcc
 OBJCOPY := arm-none-eabi-objcopy
 
+IDMELIB_DIR := ../idmetool/lib
+
 CFLAGS := -std=gnu99 -Os -mthumb -mcpu=cortex-a9 -fno-builtin-printf -fno-strict-aliasing -fno-builtin-memcpy -mno-unaligned-access -Wall -Wextra
+CFLAGS += -I$(IDMELIB_DIR) -DIDMELIB_STANDALONE
 LDFLAGS := -nodefaultlibs -nostdlib -lgcc
 
 STAGE1 := stage1
@@ -18,10 +21,10 @@ ASM_SRC = start.S
 OBJ = $(STAGE1_SRC:%.c=$(STAGE1)/%.o) $(ASM_SRC:%.S=$(STAGE1)/%.o)
 DEP = $(OBJ:%.o=%.d)
 
-STAGE2_OBJ = $(STAGE2_SRC:%.c=$(STAGE2)/%.o) $(ASM_SRC:%.S=$(STAGE2)/%.o)
+STAGE2_OBJ = $(STAGE2_SRC:%.c=$(STAGE2)/%.o) $(ASM_SRC:%.S=$(STAGE2)/%.o) $(STAGE2)/idmelib.o
 STAGE2_DEP = $(STAGE2_OBJ:%.o=%.d)
 
-PL_OBJ = $(PL_SRC:%.c=$(PL)/%.o) $(ASM_SRC:%.S=$(PL)/%.o)
+PL_OBJ = $(PL_SRC:%.c=$(PL)/%.o) $(ASM_SRC:%.S=$(PL)/%.o) $(PL)/idmelib.o
 PL_DEP = $(PL_OBJ:%.o=%.d)
 
 all: $(STAGE1)/$(STAGE1).bin $(STAGE2)/$(STAGE2).bin $(PL)/$(PL).bin
@@ -53,6 +56,10 @@ $(STAGE1)/%.o: %.c
 $(STAGE1)/%.o: %.S
 	mkdir -p $(@D)
 	$(AS) -o $@ $<
+
+$(STAGE2)/idmelib.o $(PL)/idmelib.o: $(IDMELIB_DIR)/idmelib.c
+	mkdir -p $(@D)
+	$(CC) -MMD -c -o $@ $< $(CFLAGS)
 
 -include $(STAGE2_DEP)
 
