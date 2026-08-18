@@ -26,13 +26,7 @@ def prepare(dev):
     device_type_id = dev.idme_read(b"device_type_id").rstrip(b"\x00").decode("utf-8")
 
     log("Check device_type_id")
-    if device_type_id == "A31DTMEEVDDOIV":
-        log("Detected sheldon (" + device_type_id + ")")
-    elif device_type_id == "A265XOI9586NML":
-        log("Detected sheldonp (" + device_type_id + ")")
-    else:
-        log("Wrong device detected: " + device_type_id)
-        exit(1)
+
 
 def find_partition(dev, name):
 
@@ -142,10 +136,13 @@ if __name__ == "__main__":
     if args and args[0] in ("flash", "read"):
         if len(args) != 3:
             raise RuntimeError("{} needs a partition and a file".format(args[0]))
+        args[2] = os.path.abspath(args[2])
         if args[0] == "flash" and not os.path.exists(args[2]):
             raise RuntimeError("no such file: {}".format(args[2]))
     elif args and args != ["fixgpt"]:
         raise RuntimeError("unknown command: {}".format(args[0]))
+
+    os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
     dev = Device()
     dev.find_device()
