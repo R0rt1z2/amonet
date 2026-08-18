@@ -4,7 +4,7 @@ import sys
 import time
 import threading
 
-from common import Device
+from common import BLOCKS_PER_WRITE, Device
 from logger import log
 
 class UserInputThread(threading.Thread):
@@ -53,11 +53,29 @@ def flash_data(dev, data, start_block, max_size=0):
         raise RuntimeError("data too big to flash")
 
     blocks = len(data) // 0x200
-    for x in range(blocks):
-        print("[{} / {}]".format(x + 1, blocks), end='\r')
-        dev.emmc_write(start_block + x, data[x * 0x200:(x + 1) * 0x200])
-        if x % 10 == 0:
-            dev.kick_watchdog()
+    multi = True
+    x = 0
+
+    while x < blocks:
+        run = min(BLOCKS_PER_WRITE, blocks - x)
+        chunk = data[x * 0x200:(x + run) * 0x200]
+
+        if multi:
+            dev.emmc_write_blocks(start_block + x, chunk)
+
+            if x == 0:
+                written = b"".join(dev.emmc_read(start_block + i) for i in range(run))
+                if written != chunk:
+                    log("multi block write did not read back, falling back to single blocks")
+                    multi = False
+                    continue
+        else:
+            for i in range(run):
+                dev.emmc_write(start_block + x + i, chunk[i * 0x200:(i + 1) * 0x200])
+
+        x += run
+        print("[{} / {}]".format(x, blocks), end='\r', flush=True)
+        dev.kick_watchdog()
     print("")
 
 def flash_binary(dev, path, start_block, max_size=0):
@@ -72,7 +90,7 @@ def dump_binary(dev, path, start_block, max_size=0):
     with open(path, "w+b") as fout:
         blocks = max_size // 0x200
         for x in range(blocks):
-            print("[{} / {}]".format(x + 1, blocks), end='\r')
+            print("[{} / {}]".format(x + 1, blocks), end='\r', flush=True)
             fout.write(dev.emmc_read(start_block + x))
             if x % 10 == 0:
                 dev.kick_watchdog()

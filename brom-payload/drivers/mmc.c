@@ -172,6 +172,36 @@ int mmc_write(struct msdc_host *host, uint32_t blk, void *buf)
     return msdc_pio_write(host, buf);
 }
 
+int mmc_write_blocks(struct msdc_host *host, uint32_t blk, void *buf, uint32_t blocks)
+{
+    int err;
+    struct mmc_command sbc = { 0 };
+    struct mmc_command cmd = { 0 };
+
+    if (blocks <= 1)
+        return mmc_write(host, blk, buf);
+
+    sbc.opcode = MMC_SET_BLOCK_COUNT;
+    sbc.arg = blocks;
+    sbc.flags = MMC_RSP_R1 | MMC_CMD_AC;
+
+    err = msdc_cmd(host, &sbc);
+    if (err)
+        return err;
+
+    msdc_set_blknum(host, blocks);
+
+    cmd.opcode = MMC_WRITE_MULTIPLE_BLOCK;
+    cmd.arg = blk;
+    cmd.flags = MMC_RSP_R1 | MMC_CMD_ADTC;
+
+    err = msdc_cmd(host, &cmd);
+    if (err)
+        return err;
+
+    return msdc_pio_write_multi(host, buf, blocks);
+}
+
 int mmc_send_status(struct msdc_host *host, u32 *status)
 {
     int err;
@@ -336,6 +366,37 @@ int mmc_switch(struct msdc_host *host, u8 set, u8 index, u8 value,
 
 int mmc_set_part(struct msdc_host *host, int part) {
     return mmc_switch(host, EXT_CSD_CMD_SET_NORMAL, EXT_CSD_PART_CONFIG, 72 | part, 0);
+}
+
+int mmc_enable_8bit(struct msdc_host *host) {
+    char before[512] = { 0 };
+    char after[512] = { 0 };
+
+    if (mmc_read(host, 0, before) != 0) {
+        return -1;
+    }
+
+    if (mmc_switch(host, EXT_CSD_CMD_SET_NORMAL, EXT_CSD_BUS_WIDTH,
+                   EXT_CSD_BUS_WIDTH_8, 0) != 0) {
+        printf("card refused 8 bit, staying on 1 bit\n");
+        return -1;
+    }
+
+    sdr_set_field(SDC_CFG, SDC_CFG_BUSWIDTH, 2);
+    sdr_set_field(MSDC_CFG, MSDC_CFG_CKDIV, 1);
+
+    if (mmc_read(host, 0, after) == 0 && memcmp(before, after, sizeof(before)) == 0) {
+        printf("bus is now 8 bit\n");
+        return 0;
+    }
+
+    sdr_set_field(MSDC_CFG, MSDC_CFG_CKDIV, 0);
+    sdr_set_field(SDC_CFG, SDC_CFG_BUSWIDTH, 0);
+
+    mmc_switch(host, EXT_CSD_CMD_SET_NORMAL, EXT_CSD_BUS_WIDTH,
+               EXT_CSD_BUS_WIDTH_1, 0);
+
+    return -1;
 }
 
 int mmc_rpmb_partition_ops(struct mmc_core_rpmb_req *rpmb_req, struct msdc_host *host)
