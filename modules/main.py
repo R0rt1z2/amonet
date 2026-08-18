@@ -19,7 +19,7 @@ import traceback
 import struct
 import os
 
-def main(dev):
+def prepare(dev):
 
     if dev.preloader:
         load_pl_payload(dev)
@@ -37,7 +37,45 @@ def main(dev):
         log("Wrong device detected: " + device_type_id)
         exit(1)
 
-    if len(sys.argv) == 2 and sys.argv[1] == "fixgpt":
+def find_partition(dev, name):
+
+    switch_user(dev)
+
+    gpt = parse_gpt(dev)
+    if name not in gpt:
+        raise RuntimeError("no such partition: {} (have: {})".format(name, ", ".join(sorted(gpt))))
+
+    return gpt[name]
+
+def flash_partition(dev, name, path):
+
+    prepare(dev)
+
+    start_block, blocks = find_partition(dev, name)
+    log("Flash {} to {} ({} blocks at block {})".format(path, name, blocks, start_block))
+    flash_binary(dev, path, start_block, blocks * 0x200)
+
+    time.sleep(5)
+
+    log("Reboot")
+    dev.reboot()
+
+def read_partition(dev, name, path):
+
+    prepare(dev)
+
+    start_block, blocks = find_partition(dev, name)
+    log("Dump {} ({} blocks at block {}) to {}".format(name, blocks, start_block, path))
+    dump_binary(dev, path, start_block, blocks * 0x200)
+
+    log("Reboot")
+    dev.reboot()
+
+def main(dev):
+
+    prepare(dev)
+
+    if "fixgpt" in sys.argv[1:]:
         dev.emmc_switch(0)
         log("Flashing GPT")
         flash_binary(dev, "../bin/gpt-sheldon.bin", 0, 34 * 0x200)
@@ -108,10 +146,20 @@ if __name__ == "__main__":
 
     check_modemmanager()
 
+    args = [arg for arg in sys.argv[1:] if arg != "crash"]
+
+    if args and args[0] in ("flash", "read"):
+        if len(args) != 3:
+            raise RuntimeError("{} needs a partition and a file".format(args[0]))
+        if args[0] == "flash" and not os.path.exists(args[2]):
+            raise RuntimeError("no such file: {}".format(args[2]))
+    elif args and args != ["fixgpt"]:
+        raise RuntimeError("unknown command: {}".format(args[0]))
+
     dev = Device()
     dev.find_device()
 
-    if (len(sys.argv) == 2 and sys.argv[1] == "crash") or (len(sys.argv) == 3 and sys.argv[2] == "crash"):
+    if "crash" in sys.argv[1:]:
         while dev.preloader:
             log("Found device in preloader mode, trying to crash...")
             dev.handshake()
@@ -120,4 +168,9 @@ if __name__ == "__main__":
             dev = Device()
             dev.find_device()
 
-    main(dev)
+    if args and args[0] == "flash":
+        flash_partition(dev, args[1], args[2])
+    elif args and args[0] == "read":
+        read_partition(dev, args[1], args[2])
+    else:
+        main(dev)

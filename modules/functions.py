@@ -84,7 +84,7 @@ def flash_binary(dev, path, start_block, max_size=0):
     while len(data) % 0x200 != 0:
         data += b"\x00"
 
-    flash_data(dev, data, start_block, max_size=0)
+    flash_data(dev, data, start_block, max_size=max_size)
 
 def dump_binary(dev, path, start_block, max_size=0):
     with open(path, "w+b") as fout:
