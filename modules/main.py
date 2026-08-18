@@ -87,20 +87,6 @@ def main(dev):
     switch_user(dev)
     flash_binary(dev, "../bin/lk.bin", gpt["lk"][0], gpt["lk"][1] * 0x200)
 
-    # 6) Install lk-payload
-    log("Flash lk-payload")
-    switch_boot0(dev)
-    flash_binary(dev, "../lk-payload/build/payload.bin", 1024)
-
-    # 8) Flash microloader
-    log("Inject microloader")
-    switch_user(dev)
-    boot_hdr1 = dev.emmc_read(gpt["boot"][0]) + dev.emmc_read(gpt["boot"][0] + 1)
-    boot_hdr2 = dev.emmc_read(gpt["boot"][0] + 2) + dev.emmc_read(gpt["boot"][0] + 3)
-    flash_binary(dev, "../bin/microloader.bin", gpt["boot"][0], 2 * 0x200)
-    if boot_hdr2[0:8] != b"ANDROID!":
-        flash_data(dev, boot_hdr1, gpt["boot"][0] + 2, 2 * 0x200)
-
     log("Force fastboot")
     force_fastboot(dev, gpt)
 

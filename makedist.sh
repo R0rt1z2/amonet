@@ -3,10 +3,7 @@
 rm -rf dist
 
 mkdir -p dist/unlock/kamakiri/bin
-cp bin/{preloader.img,lk.bin,tz.img,twrp.img,microloader.bin} dist/unlock/kamakiri/bin/
-
-mkdir -p dist/unlock/kamakiri/lk-payload/build
-cp lk-payload/build/payload.bin dist/unlock/kamakiri/lk-payload/build/
+cp bin/{preloader.img,lk.bin,tz.img,twrp.img} dist/unlock/kamakiri/bin/
 
 mkdir -p dist/unlock/kamakiri/modules
 cp modules/{common.py,load_payload.py,logger.py,main.py,functions.py,handshake2.py} dist/unlock/kamakiri/modules/

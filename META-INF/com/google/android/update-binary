@@ -2,8 +2,6 @@
 # kamakiri updater
 # Copyright (C) 2019 k4y0z @ xda-developers
 
-PAYLOAD_BLOCK=1024
-
 PART_PREFIX=/dev/block/platform/soc/11230000.mmc
 
 # detect whether in boot mode
@@ -81,7 +79,7 @@ INSTALLER=$TMPDIR/install
 rm -rf $TMPDIR 2>/dev/null
 mkdir -p $INSTALLER 2>/dev/null
 
-unzip -o "$ZIP" 'kamakiri/bin/twrp.img' 'kamakiri/lk-payload/build/payload.bin' 'kamakiri/bin/preloader.img' 'kamakiri/bin/tz.img' -d $INSTALLER >&2
+unzip -o "$ZIP" 'kamakiri/bin/twrp.img' 'kamakiri/bin/preloader.img' 'kamakiri/bin/tz.img' -d $INSTALLER >&2
 
 ##########################################################################################
 # Main
@@ -93,24 +91,10 @@ ui_print "kamakiri updater"
 ui_print "- updating TWRP"
 dd if=${INSTALLER}/kamakiri/bin/twrp.img of=${PART_PREFIX}/by-name/recovery
 
-dd if=${PART_PREFIX}/by-name/recovery of=/tmp/recovery_kamakiri.hdr bs=512 count=2
-dd if=${PART_PREFIX}/by-name/boot of=/tmp/boot_kamakiri.hdr bs=512 count=2
-dd if=${PART_PREFIX}/by-name/boot of=/tmp/boot_kamakiri.hdr2 bs=512 count=2 skip=2
-grep "ANDROID!" /tmp/boot_kamakiri.hdr2
-if [ $? -ne 0 ] ; then
-    ui_print "- patching boot"
-    dd if=/tmp/boot_kamakiri.hdr of=${PART_PREFIX}/by-name/boot bs=512 count=2 seek=2
-fi
-ui_print "- updating microloader"
-dd if=${INSTALLER}/kamakiri/bin/twrp.img of=${PART_PREFIX}/by-name/boot bs=512 count=2
-
 echo 0 > /sys/block/mmcblk0boot0/force_ro
 
 ui_print "- updating preloader"
 dd if=/${INSTALLER}/kamakiri/bin/preloader.img of=/dev/block/mmcblk0boot0 bs=512
-
-ui_print "- updating payload"
-dd if=/${INSTALLER}/kamakiri/lk-payload/build/payload.bin of=/dev/block/mmcblk0boot0 bs=512 seek=${PAYLOAD_BLOCK}
 
 echo 1 > /sys/block/mmcblk0boot0/force_ro
 
