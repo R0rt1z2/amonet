@@ -16,6 +16,12 @@ import traceback
 import struct
 import os
 
+DEVICE_TYPE_IDS = {
+    "A1WZKXFLI43K86": "Fire TV Stick 4K Max 2nd Gen",
+    "A1Q6UGEXJZWJQ0": "Fire TV Stick 4K 2nd Gen",
+    "AZDQ9AW1RNF81": "Fire TV Stick 4K Plus 2nd Gen",
+}
+
 def prepare(dev):
 
     if not dev.preloader:
@@ -26,6 +32,15 @@ def prepare(dev):
     device_type_id = dev.idme_read(b"device_type_id").rstrip(b"\x00").decode("utf-8")
 
     log("Check device_type_id")
+    if device_type_id in DEVICE_TYPE_IDS:
+        log("Detected {} ({})".format(DEVICE_TYPE_IDS[device_type_id], device_type_id))
+    else:
+        supported = ", ".join("{} ({})".format(name, did) for did, name in DEVICE_TYPE_IDS.items())
+        thread = UserInputThread(msg = "device_type_id is {}, expected one of: {}; this exploit may brick your device, press enter to continue anyway or terminate with Ctrl+C".format(device_type_id, supported))
+        thread.start()
+        while not thread.done:
+            dev.kick_watchdog()
+            time.sleep(1)
 
 
 def find_partition(dev, name):
@@ -69,61 +84,40 @@ def main(dev):
     if "fixgpt" in sys.argv[1:]:
         dev.emmc_switch(0)
         log("Flashing GPT")
-        flash_binary(dev, "../bin/gpt-sheldon.bin", 0, 34 * 0x200)
+        flash_binary(dev, "../bin/gpt-karat.bin", 0, 34 * 0x200)
 
-    # 1) Sanity check GPT
     log("Check GPT")
     switch_user(dev)
 
-    # 1.1) Parse gpt
     gpt = parse_gpt(dev)
     log("gpt_parsed = {}".format(gpt))
-    if "lk" not in gpt or "tee1" not in gpt or "boot" not in gpt or "recovery" not in gpt:
-        raise RuntimeError("bad gpt")
+    for part in ("mcupm", "lk", "tee1", "tee2"):
+        if part not in gpt:
+            raise RuntimeError("bad gpt")
+    find_misc(gpt)
 
-    # 2) Sanity check boot0
-    log("Check boot0")
-    switch_boot0(dev)
+    log("Flash mcupm")
+    switch_user(dev)
+    flash_binary(dev, "../bin/mcupm.img", gpt["mcupm"][0], gpt["mcupm"][1] * 0x200)
 
-    # 3) Sanity check rpmb
-    log("Check rpmb")
-    rpmb = dev.rpmb_read()
-    if rpmb[0:4] != b"AMZN":
-        thread = UserInputThread(msg = "rpmb looks broken; if this is expected (i.e. you're retrying the exploit) press enter, otherwise terminate with Ctrl+C")
-        thread.start()
-        while not thread.done:
-            dev.kick_watchdog()
-            time.sleep(1)
+    log("Flash payload")
+    switch_user(dev)
+    flash_binary(dev, "../bin/karat-kaeru.bin", gpt["lk"][0], gpt["lk"][1] * 0x200)
 
-    # 5) Zero out rpmb to enable downgrade
-    log("Downgrade rpmb")
-    dev.rpmb_write(b"\x00" * 0x100)
-    log("Recheck rpmb")
-    rpmb = dev.rpmb_read()
-    if rpmb != b"\x00" * 0x100:
-        dev.reboot()
-        raise RuntimeError("downgrade failure, giving up")
-    log("rpmb downgrade ok")
-    dev.kick_watchdog()
-
-    # 6) Downgrade tz
-    log("Flash tz")
+    log("Flash tee1")
     switch_user(dev)
     flash_binary(dev, "../bin/tz.img", gpt["tee1"][0], gpt["tee1"][1] * 0x200)
 
-    # 7) Downgrade lk
-    log("Flash lk")
+    log("Flash tee2")
     switch_user(dev)
-    flash_binary(dev, "../bin/lk.bin", gpt["lk"][0], gpt["lk"][1] * 0x200)
+    flash_binary(dev, "../bin/tz.img", gpt["tee2"][0], gpt["tee2"][1] * 0x200)
 
     log("Force fastboot")
     force_fastboot(dev, gpt)
 
-    # 9.1) Wait some time so data is flushed to EMMC
     time.sleep(5)
 
-    # Reboot (to fastboot or recovery)
-    log("Reboot")
+    log("Reboot to fastboot")
     dev.reboot()
 
 

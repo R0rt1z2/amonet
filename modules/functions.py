@@ -96,33 +96,31 @@ def dump_binary(dev, path, start_block, max_size=0):
                 dev.kick_watchdog()
     print("")
 
-def force_fastboot(dev, gpt):
+def find_misc(gpt):
+    for name in gpt:
+        if name.lower() == "misc":
+            return gpt[name]
+    raise RuntimeError("no misc partition (have: {})".format(", ".join(sorted(gpt))))
+
+def write_misc(dev, gpt, data):
+    start_block = find_misc(gpt)[0]
     switch_user(dev)
-    block = list(dev.emmc_read(gpt["MISC"][0]))
-    block[0:16] = "FASTBOOT_PLEASE\x00".encode("utf-8")
-    dev.emmc_write(gpt["MISC"][0], bytes(block))
-    block = dev.emmc_read(gpt["MISC"][0])
+    block = list(dev.emmc_read(start_block))
+    block[0:len(data)] = data
+    dev.emmc_write(start_block, bytes(block))
+    block = dev.emmc_read(start_block)
+
+def force_fastboot(dev, gpt):
+    write_misc(dev, gpt, "FASTBOOT_PLEASE\x00".encode("utf-8"))
 
 def temp_fastboot(dev, gpt):
-    switch_user(dev)
-    block = list(dev.emmc_read(gpt["MISC"][0]))
-    block[0:16] = "boot-amonet\x00\x00\x00\x00\x00".encode("utf-8")
-    dev.emmc_write(gpt["MISC"][0], bytes(block))
-    block = dev.emmc_read(gpt["MISC"][0])
+    write_misc(dev, gpt, "boot-amonet\x00\x00\x00\x00\x00".encode("utf-8"))
 
 def force_recovery(dev, gpt):
-    switch_user(dev)
-    block = list(dev.emmc_read(gpt["MISC"][0]))
-    block[0:16] = "boot-recovery\x00\x00\x00".encode("utf-8")
-    dev.emmc_write(gpt["MISC"][0], bytes(block))
-    block = dev.emmc_read(gpt["MISC"][0])
+    write_misc(dev, gpt, "boot-recovery\x00\x00\x00".encode("utf-8"))
 
 def clear_flags(dev, gpt):
-    switch_user(dev)
-    block = list(dev.emmc_read(gpt["MISC"][0]))
-    block[0:32] = b"\x00" * 32
-    dev.emmc_write(gpt["MISC"][0], bytes(block))
-    block = dev.emmc_read(gpt["MISC"][0])
+    write_misc(dev, gpt, b"\x00" * 32)
 
 def switch_user(dev):
     dev.emmc_switch(0)
