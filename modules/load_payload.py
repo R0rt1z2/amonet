@@ -18,7 +18,7 @@ def load_payload_file(path):
 def load_pl_payload(dev):
     log("Handshake")
     dev.handshake()
-    payload = load_payload_file("../brom-payload/pl/pl.bin")
+    payload = load_payload_file("../pl-payload/pl/pl.bin")
     dev.send_da(0x40001000, len(payload), 0, payload)
     dev.jump_da(0x40001000)
 
