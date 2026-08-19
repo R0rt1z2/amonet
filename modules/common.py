@@ -14,6 +14,7 @@ VID = "0E8D"
 PID = "0003"
 
 BLOCKS_PER_WRITE = 64
+BLOCKS_PER_READ = 64
 
 
 CRYPTO_BASE = 0x10210000 # for karnak
@@ -154,6 +155,25 @@ class Device:
         data = self.dev.read(0x200)
         if len(data) != 0x200:
             raise RuntimeError("read fail")
+
+        return data
+
+    def emmc_read_blocks(self, idx, blocks):
+        if blocks < 1 or blocks > BLOCKS_PER_READ:
+            raise RuntimeError("can only read 1 to {} blocks at a time".format(BLOCKS_PER_READ))
+
+        self.dev.write(p32_be(0xf00dd00d))
+        self.dev.write(p32_be(0x1004))
+        self.dev.write(p32_be(idx))
+        self.dev.write(p32_be(blocks))
+
+        size = blocks * 0x200
+        data = b""
+        while len(data) < size:
+            chunk = self.dev.read(size - len(data))
+            if not chunk:
+                raise RuntimeError("read fail (got {} of {} bytes)".format(len(data), size))
+            data += chunk
 
         return data
 

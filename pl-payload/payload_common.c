@@ -5,9 +5,9 @@
 
 static uint8_t idme_buf[IDME_SIZE];
 
-#define WRITE_BLOCKS_MAX    64
+#define XFER_BLOCKS_MAX     64
 
-static uint8_t write_buf[WRITE_BLOCKS_MAX * 0x200];
+static uint8_t xfer_buf[XFER_BLOCKS_MAX * 0x200];
 
 void sleepy(void) {
     // TODO: do better
@@ -114,19 +114,38 @@ void command_loop(struct msdc_host *host) {
             }
             break;
         }
+        case 0x1004: {
+            uint32_t block = recv_dword();
+            uint32_t blocks = recv_dword();
+
+            if (blocks == 0 || blocks > XFER_BLOCKS_MAX) {
+                printf("Refusing to read 0x%08X blocks\n", blocks);
+                break;
+            }
+
+            printf("Read 0x%08X blocks at 0x%08X ", blocks, block);
+
+            if (mmc_read_blocks(host, block, xfer_buf, blocks) != 0) {
+                printf("Read error!\n");
+            } else {
+                printf("OK\n");
+                send_data(xfer_buf, blocks * 0x200);
+            }
+            break;
+        }
         case 0x1003: {
             uint32_t block = recv_dword();
             uint32_t blocks = recv_dword();
 
-            if (blocks == 0 || blocks > WRITE_BLOCKS_MAX) {
+            if (blocks == 0 || blocks > XFER_BLOCKS_MAX) {
                 printf("Refusing to write 0x%08X blocks\n", blocks);
                 break;
             }
 
             printf("Write 0x%08X blocks at 0x%08X ", blocks, block);
-            recv_data(write_buf, blocks * 0x200, 0);
+            recv_data(xfer_buf, blocks * 0x200, 0);
 
-            if (mmc_write_blocks(host, block, write_buf, blocks) != 0) {
+            if (mmc_write_blocks(host, block, xfer_buf, blocks) != 0) {
                 printf("Write error!\n");
             } else {
                 printf("OK\n");

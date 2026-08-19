@@ -4,7 +4,7 @@ import sys
 import time
 import threading
 
-from common import BLOCKS_PER_WRITE, Device
+from common import BLOCKS_PER_READ, BLOCKS_PER_WRITE, Device
 from logger import log
 
 class UserInputThread(threading.Thread):
@@ -45,6 +45,11 @@ def switch_boot1(dev):
     dev.emmc_switch(2)
     dev.kick_watchdog()
 
+def progress(done, total, start_time):
+    elapsed = time.time() - start_time
+    speed = (done * 0x200) / elapsed / (1024 * 1024) if elapsed > 0 else 0
+    print("[{} / {}] {:.1f}% at {:.2f} MB/s   ".format(done, total, done * 100 / total, speed), end='\r', flush=True)
+
 def flash_data(dev, data, start_block, max_size=0):
     while len(data) % 0x200 != 0:
         data += b"\x00"
@@ -55,6 +60,7 @@ def flash_data(dev, data, start_block, max_size=0):
     blocks = len(data) // 0x200
     multi = True
     x = 0
+    start_time = time.time()
 
     while x < blocks:
         run = min(BLOCKS_PER_WRITE, blocks - x)
@@ -74,7 +80,7 @@ def flash_data(dev, data, start_block, max_size=0):
                 dev.emmc_write(start_block + x + i, chunk[i * 0x200:(i + 1) * 0x200])
 
         x += run
-        print("[{} / {}]".format(x, blocks), end='\r', flush=True)
+        progress(x, blocks, start_time)
         dev.kick_watchdog()
     print("")
 
@@ -89,11 +95,29 @@ def flash_binary(dev, path, start_block, max_size=0):
 def dump_binary(dev, path, start_block, max_size=0):
     with open(path, "w+b") as fout:
         blocks = max_size // 0x200
-        for x in range(blocks):
-            print("[{} / {}]".format(x + 1, blocks), end='\r', flush=True)
-            fout.write(dev.emmc_read(start_block + x))
-            if x % 10 == 0:
-                dev.kick_watchdog()
+        multi = True
+        x = 0
+        start_time = time.time()
+
+        while x < blocks:
+            run = min(BLOCKS_PER_READ, blocks - x)
+
+            if multi:
+                chunk = dev.emmc_read_blocks(start_block + x, run)
+
+                if x == 0:
+                    single = b"".join(dev.emmc_read(start_block + i) for i in range(run))
+                    if chunk != single:
+                        log("multi block read did not match, falling back to single blocks")
+                        multi = False
+                        continue
+            else:
+                chunk = b"".join(dev.emmc_read(start_block + x + i) for i in range(run))
+
+            fout.write(chunk)
+            x += run
+            progress(x, blocks, start_time)
+            dev.kick_watchdog()
     print("")
 
 def find_misc(gpt):

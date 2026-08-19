@@ -31,7 +31,6 @@ def prepare(dev):
 
     device_type_id = dev.idme_read(b"device_type_id").rstrip(b"\x00").decode("utf-8")
 
-    log("Check device_type_id")
     if device_type_id in DEVICE_TYPE_IDS:
         log("Detected {} ({})".format(DEVICE_TYPE_IDS[device_type_id], device_type_id))
     else:
