@@ -1,30 +1,42 @@
 #!/bin/bash
 
-rm -rf dist
+set -e
 
-mkdir -p dist/unlock/kamakiri/bin
-cp bin/{preloader.img,lk.bin,tz.img,twrp.img} dist/unlock/kamakiri/bin/
+cd "$(cd "$(dirname "$0")" && pwd)"
 
-mkdir -p dist/unlock/kamakiri/modules
-cp modules/{common.py,load_payload.py,logger.py,main.py,functions.py,handshake2.py} dist/unlock/kamakiri/modules/
+VERSION="1.0.0"
+NAME="amonet-karat"
+ZIP="$NAME-v$VERSION.zip"
+DIST="dist/$NAME"
 
-mkdir -p dist/unlock/kamakiri/pl-payload/pl
-cp pl-payload/pl/pl.bin dist/unlock/kamakiri/pl-payload/pl/
+rm -rf dist "$ZIP"
 
-cp {bootrom-step.sh,fastboot-step.sh,boot-recovery.sh,boot-fastboot.sh} dist/unlock/kamakiri/
+mkdir -p "$DIST/bin"
+cp bin/{gpt-karat.bin,karat-kaeru.bin,mcupm.img,tz.img,twrp.img,unlock} "$DIST/bin/"
 
-mkdir -p dist/unlock/META-INF/com/google/android
-cp META-INF/com/google/android/{update-binary,updater-script} dist/unlock/META-INF/com/google/android/
+for f in adb-linux adb-darwin adb.exe AdbWinApi.dll AdbWinUsbApi.dll libwinpthread-1.dll; do
+    if [ -f "bin/$f" ]; then
+        cp "bin/$f" "$DIST/bin/"
+    else
+        echo "warning: bin/$f not found, not bundled"
+    fi
+done
 
-#mkdir -p dist/stock/kamakiri/bin
-#cp bin/{boot.img,recovery.img} dist/stock/kamakiri/bin/
-#cp return-to-stock.sh dist/stock/kamakiri/
+mkdir -p "$DIST/modules"
+cp modules/{common.py,functions.py,gpt.py,handshake2.py,load_payload.py,logger.py,main.py} "$DIST/modules/"
 
-mkdir -p dist/gptfix/kamakiri/bin
-cp gpt-fix.sh dist/gptfix/kamakiri/
-cp bin/gpt-sheldon.bin dist/gptfix/kamakiri/bin/
+mkdir -p "$DIST/pl-payload/pl"
+cp pl-payload/pl/pl.bin "$DIST/pl-payload/pl/"
 
-mkdir -p dist/full
-cp -r dist/unlock/* dist/full/
-#cp -r dist/stock/* dist/full/
-cp -r dist/gptfix/* dist/full/
+cp bootrom-step.sh fastboot-step.sh boot-recovery.sh boot-fastboot.sh gpt-fix.sh "$DIST/"
+cp unlock.sh unlock.ps1 unlock.bat "$DIST/"
+cp boot-recovery.bat boot-fastboot.bat "$DIST/"
+cp README.md requirements.txt "$DIST/"
+
+chmod 755 "$DIST"/*.sh "$DIST/bin/unlock"
+
+cd dist
+zip -qr "../$ZIP" "$NAME"
+cd ..
+
+echo "$ZIP"
