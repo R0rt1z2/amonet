@@ -1,10 +1,10 @@
-import struct
 import os
 import sys
 import time
 import threading
 
 from common import BLOCKS_PER_READ, BLOCKS_PER_WRITE, Device
+from gpt import parse_gpt_compat
 from logger import log
 
 class UserInputThread(threading.Thread):
@@ -155,13 +155,12 @@ def switch_user(dev):
     dev.kick_watchdog()
 
 def parse_gpt(dev):
-    data = dev.emmc_read(0x400 // 0x200) + dev.emmc_read(0x600 // 0x200) + dev.emmc_read(0x800 // 0x200) + dev.emmc_read(0xA00 // 0x200)
-    num = len(data) // 0x80
-    parts = dict()
-    for x in range(num):
-        part = data[x * 0x80:(x + 1) * 0x80]
-        part_name = part[0x38:].decode("utf-16le").rstrip("\x00")
-        part_start = struct.unpack("<Q", part[0x20:0x28])[0]
-        part_end = struct.unpack("<Q", part[0x28:0x30])[0]
-        parts[part_name] = (part_start, part_end - part_start + 1)
+    data = b""
+    for block in range(1, 34):
+        data += dev.emmc_read(block)
+        if block % 10 == 0:
+            dev.kick_watchdog()
+
+    parts, _, _ = parse_gpt_compat(data)
+
     return parts

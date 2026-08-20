@@ -89,7 +89,6 @@ def main(dev):
     switch_user(dev)
 
     gpt = parse_gpt(dev)
-    log("gpt_parsed = {}".format(gpt))
     for part in ("mcupm", "lk", "tee1", "tee2"):
         if part not in gpt:
             raise RuntimeError("bad gpt")
