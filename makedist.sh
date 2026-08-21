@@ -4,10 +4,11 @@ set -e
 
 cd "$(cd "$(dirname "$0")" && pwd)"
 
-VERSION="1.0.0"
-NAME="amonet-karat"
-ZIP="$NAME-v$VERSION.zip"
-DIST="dist/$NAME"
+VERSION="1.2.0"
+DEVICE="karat"
+
+ZIP="amonet-${DEVICE}-v${VERSION}.zip"
+DIST="dist/amonet"
 
 rm -rf dist "$ZIP"
 
@@ -33,10 +34,22 @@ cp unlock.sh unlock.ps1 unlock.bat "$DIST/"
 cp boot-recovery.bat boot-fastboot.bat "$DIST/"
 cp README.md requirements.txt "$DIST/"
 
+
+mkdir -p "dist/META-INF/com/google/android"
+cp META-INF/com/google/android/{update-binary,updater-script} "dist/META-INF/com/google/android/"
+chmod 755 "dist/META-INF/com/google/android/update-binary"
+
 chmod 755 "$DIST"/*.sh "$DIST/bin/unlock"
 
+for f in bin/twrp.img bin/karat-kaeru.bin; do
+    if [ ! -f "$DIST/$f" ]; then
+        echo "error: $DIST/$f is missing, refusing to build $ZIP" >&2
+        exit 1
+    fi
+done
+
 cd dist
-zip -qr "../$ZIP" "$NAME"
+zip -qr "../$ZIP" amonet META-INF
 cd ..
 
 echo "$ZIP"

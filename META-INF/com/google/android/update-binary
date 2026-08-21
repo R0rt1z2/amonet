@@ -1,3 +1,153 @@
-#!/sbin/sh
+#!/sbin/sh -x
+# amonet updater
+# Copyright (C) 2019 k4y0z @ xda-developers
+# Copyright (C) 2026 R0rt1z2
+
+BY_NAME_DIRS="
+/dev/block/by-name
+/dev/block/platform/soc/11230000.mmc/by-name
+/dev/block/platform/mtk-msdc.0/by-name
+/dev/block/platform/soc/by-name
+/dev/block/platform/*/by-name
+/dev/block/platform/*/*/by-name
+"
+
+getprop | grep zygote | grep -q running && bootMode=true || bootMode=false
+
+umask 022
+
+ui_print() {
+  $bootMode && echo -e "$1" || echo -e "ui_print $1\nui_print" >> /proc/self/fd/$outFD
+}
+
+show_progress() {
+  $bootMode || echo -e "progress $1 $2" >> /proc/self/fd/$outFD
+}
+
+set_progress() {
+  $bootMode || echo -e "set_progress $1" >> /proc/self/fd/$outFD
+}
+
+if $bootMode; then
+  ui_print " "
+  ui_print "(!) Boot mode install is not supported"
+  ui_print "- Install from recovery mode"
+  ui_print " "
+  exit 1
+fi
+
+grep_prop() {
+  REGEX="s/^$1=//p"
+  shift
+  FILES=$@
+  [ -z "$FILES" ] && FILES='/default.prop'
+  sed -n "$REGEX" $FILES 2>/dev/null | head -n 1
+}
+
+check_product() {
+  for _prop in ro.product.device ro.product.system.device ro.product.vendor.device ro.build.product; do
+    product=$(getprop $_prop 2>/dev/null)
+    [ -n "$product" ] && break
+    product=$(grep_prop $_prop)
+    [ -n "$product" ] && break
+  done
+
+  if [ "$product" != "${1}" ] ; then
+    ui_print "This is only for the \"${1}\"${2} your device is a \"${product}\""
+    exit 1
+  fi
+}
+
+abort() {
+  ui_print " "
+  ui_print "(!) $1"
+  ui_print " "
+  exit 1
+}
+
+find_part() {
+  for _name in "$@"; do
+    for _dir in $BY_NAME_DIRS; do
+      if [ -b "$_dir/$_name" ]; then
+        echo "$_dir/$_name"
+        return 0
+      fi
+    done
+  done
+  return 1
+}
+
+flash_part() {
+  _label="$1"
+  _src="$2"
+  shift 2
+  [ -f "$_src" ] || abort "Missing $(basename "$_src") - bad or incomplete zip"
+  _node=$(find_part "$@") || abort "Could not find the $1 partition"
+  dd if="$_src" of="$_node" || abort "Failed to write $_label"
+}
+
+setenforce 0
+
+outFD=$2
+ZIP="$3"
+
+readlink /proc/$$/fd/$outFD 2>/dev/null | grep /tmp >/dev/null
+if [ "$?" -eq "0" ]; then
+  outFD=0
+
+  for FD in `ls /proc/$$/fd`; do
+    readlink /proc/$$/fd/$FD 2>/dev/null | grep pipe >/dev/null
+    if [ "$?" -eq "0" ]; then
+      ps | grep " 3 $FD " | grep -v grep >/dev/null
+      if [ "$?" -eq "0" ]; then
+        outFD=$FD
+        break
+      fi
+    fi
+  done
+fi
+
+TMPDIR=/dev/tmp
+INSTALLER=$TMPDIR/install
+
+rm -rf $TMPDIR 2>/dev/null
+mkdir -p $INSTALLER 2>/dev/null
+
+check_product "karat" " - Amazon Fire TV Stick 4K 2nd Gen series - "
+
+unzip -o "$ZIP" 'amonet/bin/twrp.img' 'amonet/bin/karat-kaeru.bin' -d $INSTALLER >&2
+
+ui_print " "
+ui_print "amonet updater"
+
+BIN=${INSTALLER}/amonet/bin
+
+ui_print "- Checking package"
+
+for f in twrp.img karat-kaeru.bin; do
+  [ -s "${BIN}/$f" ] || abort "Missing or empty $f - bad or incomplete zip"
+done
+
+for p in lk_real recovery; do
+  find_part "$p" >/dev/null || abort "Could not find the $p partition"
+done
+
+show_progress 1.0 0
+
+ui_print "- Updating kaeru"
+flash_part "kaeru" ${BIN}/karat-kaeru.bin lk_real
+set_progress 0.50
+
+ui_print "- Updating TWRP"
+flash_part "TWRP" ${BIN}/twrp.img recovery
+set_progress 1.00
+
+sync
+
+ui_print " "
+ui_print "- Done, device will reboot to recovery in 5s"
+sleep 5
+
+reboot recovery
 
 exit 0

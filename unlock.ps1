@@ -59,7 +59,6 @@ if ($LASTEXITCODE -ne 0) { Die "Failed to push unlock" }
 & $Adb shell "chmod 755 /data/local/tmp/unlock" 2>&1 | Out-Null
 
 & $Adb shell "su -c /data/local/tmp/unlock"
-if ($LASTEXITCODE -ne 0) { Die "Unlock failed" }
 
 Write-Host "Done, device should reboot to TWRP." -ForegroundColor Green
 

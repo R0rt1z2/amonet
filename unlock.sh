@@ -57,6 +57,6 @@ clear 2>/dev/null || printf '\033[2J\033[3J\033[H'
 
 "$ADB" push "$BIN" /data/local/tmp/unlock > /dev/null 2>&1 || die "Failed to push unlock"
 "$ADB" shell 'chmod 755 /data/local/tmp/unlock' > /dev/null 2>&1
-"$ADB" shell 'su -c /data/local/tmp/unlock'
+"$ADB" shell 'su -c /data/local/tmp/unlock' || true
 
 printf '\033[1;32m%s\033[0m\n' "Done, device should reboot to TWRP."
