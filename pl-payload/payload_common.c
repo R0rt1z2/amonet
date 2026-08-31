@@ -3,14 +3,21 @@
 
 #include "idmelib.h"
 
+#define WDT_BASE        0x10007000
+#define WDT_MODE        (WDT_BASE + 0x00)
+#define WDT_RESTART     (WDT_BASE + 0x08)
+#define WDT_SWRST       (WDT_BASE + 0x14)
+
+#define WDT_RESTART_KEY 0x1971
+#define WDT_MODE_KEY    0x22000014
+#define WDT_SWRST_KEY   0x1209
+
+#define XFER_BLOCKS_MAX 1024
+
 static uint8_t idme_buf[IDME_SIZE];
-
-#define XFER_BLOCKS_MAX     64
-
 static uint8_t xfer_buf[XFER_BLOCKS_MAX * 0x200];
 
 void sleepy(void) {
-    // TODO: do better
     for (volatile int i = 0; i < 0x80000; ++i) {}
 }
 
@@ -20,11 +27,14 @@ void mdelay (unsigned long msec)
     sleepy();
 }
 
-/* delay usec useconds */
 void udelay (unsigned long usec)
 {
     (void)usec;
     sleepy();
+}
+
+static void wdt_kick(void) {
+    *(volatile uint32_t *)WDT_RESTART = WDT_RESTART_KEY;
 }
 
 void hex_dump(const void* data, size_t size) {
@@ -51,23 +61,18 @@ void hex_dump(const void* data, size_t size) {
 static struct idme *read_idme(struct msdc_host *host) {
     struct idme *idme = 0;
 
-    printf("Switch to boot1 => ");
-    printf("0x%08X\n", mmc_set_part(host, 2));
-    mdelay(500);
-
-    for (uint32_t block = 0; block < IDME_NUM_BLOCKS; block++) {
-        if (mmc_read(host, block, idme_buf + block * IDME_MMC_BLOCK_SIZE) != 0) {
-            printf("Read error!\n");
-            goto out;
-        }
+    if (mmc_set_part(host, 2) != 0) {
+        printf("Switch to boot1 failed!\n");
+        return 0;
     }
 
-    idme = (struct idme *)idme_buf;
+    if (mmc_read_blocks(host, 0, idme_buf, IDME_NUM_BLOCKS) != 0)
+        printf("Read error!\n");
+    else
+        idme = (struct idme *)idme_buf;
 
-out:
-    printf("Switch back to user => ");
-    printf("0x%08X\n", mmc_set_part(host, 0));
-    mdelay(500);
+    if (mmc_set_part(host, 0) != 0)
+        printf("Switch back to user failed!\n");
 
     return idme;
 }
@@ -81,37 +86,34 @@ void command_loop(struct msdc_host *host) {
     send_dword(0xB1B2B3B4);
 
     while (1) {
-        memset(buf, 0, sizeof(buf));
         uint32_t magic = recv_dword();
         if (magic != 0xf00dd00d) {
             printf("Protocol error\n");
             printf("Magic received = 0x%08X\n", magic);
             break;
         }
+
+        wdt_kick();
+
         uint32_t cmd = recv_dword();
         switch (cmd) {
         case 0x1000: {
             uint32_t block = recv_dword();
-            printf("Read block 0x%08X\n", block);
             memset(buf, 0, sizeof(buf));
-            if (mmc_read(host, block, buf) != 0) {
-                printf("Read error!\n");
-            } else {
+            if (mmc_read(host, block, buf) != 0)
+                printf("Read error at block 0x%08X!\n", block);
+            else
                 send_data(buf, sizeof(buf));
-            }
             break;
         }
         case 0x1001: {
             uint32_t block = recv_dword();
-            printf("Write block 0x%08X ", block);
             memset(buf, 0, sizeof(buf));
             recv_data(buf, 0x200, 0);
-            if (mmc_write(host, block, buf) != 0) {
-                printf("Write error!\n");
-            } else {
-                printf("OK\n");
+            if (mmc_write(host, block, buf) != 0)
+                printf("Write error at block 0x%08X!\n", block);
+            else
                 send_dword(0xD0D0D0D0);
-            }
             break;
         }
         case 0x1004: {
@@ -123,14 +125,10 @@ void command_loop(struct msdc_host *host) {
                 break;
             }
 
-            printf("Read 0x%08X blocks at 0x%08X ", blocks, block);
-
-            if (mmc_read_blocks(host, block, xfer_buf, blocks) != 0) {
-                printf("Read error!\n");
-            } else {
-                printf("OK\n");
+            if (mmc_read_blocks(host, block, xfer_buf, blocks) != 0)
+                printf("Read error at block 0x%08X!\n", block);
+            else
                 send_data(xfer_buf, blocks * 0x200);
-            }
             break;
         }
         case 0x1003: {
@@ -142,15 +140,12 @@ void command_loop(struct msdc_host *host) {
                 break;
             }
 
-            printf("Write 0x%08X blocks at 0x%08X ", blocks, block);
             recv_data(xfer_buf, blocks * 0x200, 0);
 
-            if (mmc_write_blocks(host, block, xfer_buf, blocks) != 0) {
-                printf("Write error!\n");
-            } else {
-                printf("OK\n");
+            if (mmc_write_blocks(host, block, xfer_buf, blocks) != 0)
+                printf("Write error at block 0x%08X!\n", block);
+            else
                 send_dword(0xD0D0D0D0);
-            }
             break;
         }
         case 0x1002: {
@@ -158,7 +153,10 @@ void command_loop(struct msdc_host *host) {
             printf("Switch to partition %d => ", part);
             ret = mmc_set_part(host, part);
             printf("0x%08X\n", ret);
-            mdelay(500); // just in case
+            break;
+        }
+        case 0x1005: {
+            send_dword(XFER_BLOCKS_MAX);
             break;
         }
         case 0x2000: {
@@ -225,21 +223,16 @@ void command_loop(struct msdc_host *host) {
         }
         case 0x3000: {
             printf("Reboot\n");
-            volatile uint32_t *reg = (volatile uint32_t *)0x10007000;
-            reg[8/4] = 0x1971;
-            reg[0/4] = 0x22000014;
-            reg[0x14/4] = 0x1209;
+            *(volatile uint32_t *)WDT_RESTART = WDT_RESTART_KEY;
+            *(volatile uint32_t *)WDT_MODE = WDT_MODE_KEY;
+            *(volatile uint32_t *)WDT_SWRST = WDT_SWRST_KEY;
 
             while (1) {
 
             }
         }
-        case 0x3001: {
-            printf("Kick watchdog\n");
-            volatile uint32_t *reg = (volatile uint32_t *)0x10007000;
-            reg[8/4] = 0x1971;
+        case 0x3001:
             break;
-        }
         default:
             printf("Invalid command\n");
             break;

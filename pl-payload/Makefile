@@ -11,7 +11,7 @@ LDFLAGS := -nodefaultlibs -nostdlib -lgcc
 
 PL := pl
 
-PL_SRC = pl.c common.c payload_common.c libc.c printf.c drivers/sd.c drivers/mmc.c crypto/sha256.c crypto/hmac-sha256.c
+PL_SRC = pl.c common.c mmu.c payload_common.c libc.c printf.c drivers/sd.c drivers/mmc.c crypto/sha256.c crypto/hmac-sha256.c
 ASM_SRC = start.S
 
 PL_OBJ = $(PL_SRC:%.c=$(PL)/%.o) $(ASM_SRC:%.S=$(PL)/%.o) $(PL)/idmelib.o

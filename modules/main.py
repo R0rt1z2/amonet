@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import os
 import sys
 import time
 
@@ -8,18 +9,8 @@ from logger import log
 from load_payload import load_pl_payload
 from functions import *
 
-import ctypes
-
-import traceback
-
-
-import struct
-import os
-
 DEVICE_TYPE_IDS = {
-    "A1WZKXFLI43K86": "Fire TV Stick 4K Max 2nd Gen",
-    "A1Q6UGEXJZWJQ0": "Fire TV Stick 4K 2nd Gen",
-    "AZDQ9AW1RNF81": "Fire TV Stick 4K Plus 2nd Gen",
+    "A2QCPPMSOLGVZE": "Fire Max 11 (2023)",
 }
 
 def prepare(dev):
@@ -31,15 +22,11 @@ def prepare(dev):
 
     device_type_id = dev.idme_read(b"device_type_id").rstrip(b"\x00").decode("utf-8")
 
-    if device_type_id in DEVICE_TYPE_IDS:
-        log("Detected {} ({})".format(DEVICE_TYPE_IDS[device_type_id], device_type_id))
-    else:
+    if device_type_id not in DEVICE_TYPE_IDS:
         supported = ", ".join("{} ({})".format(name, did) for did, name in DEVICE_TYPE_IDS.items())
-        thread = UserInputThread(msg = "device_type_id is {}, expected one of: {}; this exploit may brick your device, press enter to continue anyway or terminate with Ctrl+C".format(device_type_id, supported))
-        thread.start()
-        while not thread.done:
-            dev.kick_watchdog()
-            time.sleep(1)
+        raise RuntimeError("device_type_id is {}, but this exploit only supports: {}".format(device_type_id, supported))
+
+    log("Detected {} ({})".format(DEVICE_TYPE_IDS[device_type_id], device_type_id))
 
 
 def find_partition(dev, name):

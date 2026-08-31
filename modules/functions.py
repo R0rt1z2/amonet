@@ -3,9 +3,11 @@ import sys
 import time
 import threading
 
-from common import BLOCKS_PER_READ, BLOCKS_PER_WRITE, Device
+from common import Device
 from gpt import parse_gpt_compat
 from logger import log
+
+VERIFY_BLOCKS = 8
 
 class UserInputThread(threading.Thread):
 
@@ -39,16 +41,25 @@ def switch_boot0(dev):
     if block[0:9] != b"EMMC_BOOT" and block != b"\x00" * 0x200:
         dev.reboot()
         raise RuntimeError("what's wrong with your BOOT0?")
-    dev.kick_watchdog()
 
 def switch_boot1(dev):
     dev.emmc_switch(2)
-    dev.kick_watchdog()
 
 def progress(done, total, start_time):
     elapsed = time.time() - start_time
     speed = (done * 0x200) / elapsed / (1024 * 1024) if elapsed > 0 else 0
     print("[{} / {}] {:.1f}% at {:.2f} MB/s   ".format(done, total, done * 100 / total, speed), end='\r', flush=True)
+
+def check_multi_read(dev, start_block):
+    verify = min(VERIFY_BLOCKS, dev.max_blocks)
+    multi = dev.emmc_read_blocks(start_block, verify)
+    single = b"".join(dev.emmc_read(start_block + i) for i in range(verify))
+    return multi == single
+
+def check_multi_write(dev, start_block, chunk):
+    verify = min(VERIFY_BLOCKS, len(chunk) // 0x200)
+    written = b"".join(dev.emmc_read(start_block + i) for i in range(verify))
+    return written == chunk[:verify * 0x200]
 
 def flash_data(dev, data, start_block, max_size=0):
     while len(data) % 0x200 != 0:
@@ -63,25 +74,22 @@ def flash_data(dev, data, start_block, max_size=0):
     start_time = time.time()
 
     while x < blocks:
-        run = min(BLOCKS_PER_WRITE, blocks - x)
+        run = min(dev.max_blocks, blocks - x)
         chunk = data[x * 0x200:(x + run) * 0x200]
 
         if multi:
             dev.emmc_write_blocks(start_block + x, chunk)
 
-            if x == 0:
-                written = b"".join(dev.emmc_read(start_block + i) for i in range(run))
-                if written != chunk:
-                    log("multi block write did not read back, falling back to single blocks")
-                    multi = False
-                    continue
+            if x == 0 and not check_multi_write(dev, start_block, chunk):
+                log("multi block write did not read back, falling back to single blocks")
+                multi = False
+                continue
         else:
             for i in range(run):
                 dev.emmc_write(start_block + x + i, chunk[i * 0x200:(i + 1) * 0x200])
 
         x += run
         progress(x, blocks, start_time)
-        dev.kick_watchdog()
     print("")
 
 def flash_binary(dev, path, start_block, max_size=0):
@@ -93,31 +101,26 @@ def flash_binary(dev, path, start_block, max_size=0):
     flash_data(dev, data, start_block, max_size=max_size)
 
 def dump_binary(dev, path, start_block, max_size=0):
+    blocks = max_size // 0x200
+    multi = check_multi_read(dev, start_block)
+    if not multi:
+        log("multi block access is broken, falling back to single blocks")
+
     with open(path, "w+b") as fout:
-        blocks = max_size // 0x200
-        multi = True
         x = 0
         start_time = time.time()
 
         while x < blocks:
-            run = min(BLOCKS_PER_READ, blocks - x)
+            run = min(dev.max_blocks, blocks - x)
 
             if multi:
                 chunk = dev.emmc_read_blocks(start_block + x, run)
-
-                if x == 0:
-                    single = b"".join(dev.emmc_read(start_block + i) for i in range(run))
-                    if chunk != single:
-                        log("multi block read did not match, falling back to single blocks")
-                        multi = False
-                        continue
             else:
                 chunk = b"".join(dev.emmc_read(start_block + x + i) for i in range(run))
 
             fout.write(chunk)
             x += run
             progress(x, blocks, start_time)
-            dev.kick_watchdog()
     print("")
 
 def find_misc(gpt):
@@ -132,7 +135,6 @@ def write_misc(dev, gpt, data):
     block = list(dev.emmc_read(start_block))
     block[0:len(data)] = data
     dev.emmc_write(start_block, bytes(block))
-    block = dev.emmc_read(start_block)
 
 def force_fastboot(dev, gpt):
     write_misc(dev, gpt, "FASTBOOT_PLEASE\x00".encode("utf-8"))
@@ -152,14 +154,9 @@ def switch_user(dev):
     if block[510:512] != b"\x55\xAA":
         dev.reboot()
         raise RuntimeError("what's wrong with your GPT?")
-    dev.kick_watchdog()
 
 def parse_gpt(dev):
-    data = b""
-    for block in range(1, 34):
-        data += dev.emmc_read(block)
-        if block % 10 == 0:
-            dev.kick_watchdog()
+    data = dev.emmc_read_blocks(1, 33)
 
     parts, _, _ = parse_gpt_compat(data)
 

@@ -19,14 +19,12 @@ def load_pl_payload(dev):
     log("Handshake")
     dev.handshake()
     payload = load_payload_file("../pl-payload/pl/pl.bin")
-    dev.send_da(0x40001000, len(payload), 0, payload)
-    dev.jump_da(0x40001000)
+    dev.send_da(0x40200000, len(payload), 0, payload)
+    dev.jump_da(0x40200000)
 
-    data = dev.dev.read(4)
-    if data != b"\xB1\xB2\xB3\xB4":
-        raise RuntimeError("received {} instead of expected pattern".format(data))
+    dev.wait_payload()
 
-    log("All good")
+    log("Payload transfer size = {} KiB".format(dev.query_max_blocks() // 2))
 
 if __name__ == "__main__":
 

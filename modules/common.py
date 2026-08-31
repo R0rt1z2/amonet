@@ -13,11 +13,10 @@ TIMEOUT = 5
 VID = "0E8D"
 PID = "0003"
 
-BLOCKS_PER_WRITE = 64
-BLOCKS_PER_READ = 64
+MAX_BLOCKS_DEFAULT = 64
 
 
-CRYPTO_BASE = 0x10210000 # for karnak
+CRYPTO_BASE = 0x10210000
 
 
 def serial_ports ():
@@ -71,6 +70,7 @@ class Device:
     def __init__(self, port=None):
         self.dev = None
         self.preloader = False
+        self.max_blocks = MAX_BLOCKS_DEFAULT
         if port:
             self.dev = serial.Serial(port, BAUD, timeout=TIMEOUT)
 
@@ -84,11 +84,9 @@ class Device:
         while True:
             new = serial_ports()
 
-            # port added
             if new > old:
                 port = (new - old).pop()
                 break
-            # port removed
             elif old > new:
                 old = new
 
@@ -114,7 +112,6 @@ class Device:
         return self.dev.read()
 
     def handshake(self):
-        # look for start byte
         while True:
             c = self._writeb(b'\xa0')
             if c == b'\x5f':
@@ -124,13 +121,11 @@ class Device:
             self.dev.flushInput()
             self.dev.flushOutput()
 
-        # complete sequence
         self.check(self._writeb(b'\x0a'), b'\xf5')
         self.check(self._writeb(b'\x50'), b'\xaf')
         self.check(self._writeb(b'\x05'), b'\xfa')
 
     def handshake2(self, cmd='FACTFACT'):
-        # look for start byte
         c = 0
         while c != b'Y':
             c = self.dev.read()
@@ -144,138 +139,87 @@ class Device:
         if data != b"\xB1\xB2\xB3\xB4":
             raise RuntimeError("received {} instead of expected pattern".format(data))
 
-    def emmc_read(self, idx):
-        # magic
-        self.dev.write(p32_be(0xf00dd00d))
-        # cmd
-        self.dev.write(p32_be(0x1000))
-        # block to read
-        self.dev.write(p32_be(idx))
+    def command(self, cmd, *args, payload=None):
+        packet = b"".join(p32_be(word) for word in (0xf00dd00d, cmd) + args)
+        if payload is not None:
+            packet += payload
+        self.dev.write(packet)
 
-        data = self.dev.read(0x200)
-        if len(data) != 0x200:
-            raise RuntimeError("read fail")
-
-        return data
-
-    def emmc_read_blocks(self, idx, blocks):
-        if blocks < 1 or blocks > BLOCKS_PER_READ:
-            raise RuntimeError("can only read 1 to {} blocks at a time".format(BLOCKS_PER_READ))
-
-        self.dev.write(p32_be(0xf00dd00d))
-        self.dev.write(p32_be(0x1004))
-        self.dev.write(p32_be(idx))
-        self.dev.write(p32_be(blocks))
-
-        size = blocks * 0x200
-        data = b""
+    def read_exact(self, size):
+        data = bytearray()
         while len(data) < size:
             chunk = self.dev.read(size - len(data))
             if not chunk:
                 raise RuntimeError("read fail (got {} of {} bytes)".format(len(data), size))
             data += chunk
+        return bytes(data)
 
-        return data
+    def expect_ack(self):
+        code = self.read_exact(4)
+        if code != b"\xd0\xd0\xd0\xd0":
+            raise RuntimeError("device failure")
+
+    def query_max_blocks(self):
+        self.command(0x1005)
+        self.max_blocks = struct.unpack('>I', self.read_exact(4))[0]
+        if self.max_blocks < 1 or self.max_blocks > 0x10000:
+            raise RuntimeError("device reported bogus block limit {}".format(self.max_blocks))
+        return self.max_blocks
+
+    def emmc_read(self, idx):
+        self.command(0x1000, idx)
+        return self.read_exact(0x200)
+
+    def emmc_read_blocks(self, idx, blocks):
+        if blocks < 1 or blocks > self.max_blocks:
+            raise RuntimeError("can only read 1 to {} blocks at a time".format(self.max_blocks))
+
+        self.command(0x1004, idx, blocks)
+        return self.read_exact(blocks * 0x200)
 
     def emmc_write(self, idx, data):
         if len(data) != 0x200:
             raise RuntimeError("data must be 0x200 bytes")
 
-        # magic
-        self.dev.write(p32_be(0xf00dd00d))
-        # cmd
-        self.dev.write(p32_be(0x1001))
-        # block to write
-        self.dev.write(p32_be(idx))
-        # data
-        self.dev.write(data)
-
-        code = self.dev.read(4)
-        if code != b"\xd0\xd0\xd0\xd0":
-            raise RuntimeError("device failure")
+        self.command(0x1001, idx, payload=data)
+        self.expect_ack()
 
     def emmc_write_blocks(self, idx, data):
         if len(data) % 0x200 != 0:
             raise RuntimeError("data must be a whole number of blocks")
 
         blocks = len(data) // 0x200
-        if blocks < 1 or blocks > BLOCKS_PER_WRITE:
-            raise RuntimeError("can only write 1 to {} blocks at a time".format(BLOCKS_PER_WRITE))
+        if blocks < 1 or blocks > self.max_blocks:
+            raise RuntimeError("can only write 1 to {} blocks at a time".format(self.max_blocks))
 
-        self.dev.write(p32_be(0xf00dd00d))
-        self.dev.write(p32_be(0x1003))
-        self.dev.write(p32_be(idx))
-        self.dev.write(p32_be(blocks))
-        self.dev.write(data)
-
-        code = self.dev.read(4)
-        if code != b"\xd0\xd0\xd0\xd0":
-            raise RuntimeError("device failure")
+        self.command(0x1003, idx, blocks, payload=data)
+        self.expect_ack()
 
     def emmc_switch(self, part):
-        # magic
-        self.dev.write(p32_be(0xf00dd00d))
-        # cmd
-        self.dev.write(p32_be(0x1002))
-        # partition
-        self.dev.write(p32_be(part))
+        self.command(0x1002, part)
 
     def reboot(self):
-        # magic
-        self.dev.write(p32_be(0xf00dd00d))
-        # cmd
-        self.dev.write(p32_be(0x3000))        
+        self.command(0x3000)
 
     def kick_watchdog(self):
-        # magic
-        self.dev.write(p32_be(0xf00dd00d))
-        # cmd
-        self.dev.write(p32_be(0x3001))
+        self.command(0x3001)
 
     def rpmb_read(self):
-        # magic
-        self.dev.write(p32_be(0xf00dd00d))
-        # cmd
-        self.dev.write(p32_be(0x2000))
-
-        data = self.dev.read(0x100)
-        if len(data) != 0x100:
-            raise RuntimeError("read fail")
-
-        return data
+        self.command(0x2000)
+        return self.read_exact(0x100)
 
     def mem_read(self, address, size):
-        # magic
-        self.dev.write(p32_be(0xf00dd00d))
-        # cmd
-        self.dev.write(p32_be(0x5000))
-        # address
-        self.dev.write(p32_be(address))
-        # size
-        self.dev.write(p32_be(size))
-
-        data = self.dev.read(size)
-        if len(data) != size:
-            raise RuntimeError("read fail")
-
-        return data
+        self.command(0x5000, address, size)
+        return self.read_exact(size)
 
     def idme_read(self, field_name):
         if len(field_name) > 16:
             raise RuntimeError("field name must be at most 16 bytes")
 
-        # magic
-        self.dev.write(p32_be(0xf00dd00d))
-        # cmd
-        self.dev.write(p32_be(0x7000))
-        self.dev.write(field_name + b"\x00" * (16 - len(field_name)))
+        self.command(0x7000, payload=field_name + b"\x00" * (16 - len(field_name)))
 
-        size = struct.unpack('>I', self.dev.read(4))[0]
-
-        data = self.dev.read((size + 3) & ~3)
-        if len(data) != ((size + 3) & ~3):
-            raise RuntimeError("read fail")
-        data = data[:size]
+        size = struct.unpack('>I', self.read_exact(4))[0]
+        data = self.read_exact((size + 3) & ~3)[:size]
 
         if data == p32_be(0xffffffff):
             raise RuntimeError("read fail")
@@ -293,12 +237,7 @@ class Device:
         if len(data) != 0x100:
             raise RuntimeError("data must be 0x100 bytes")
 
-        # magic
-        self.dev.write(p32_be(0xf00dd00d))
-        # cmd
-        self.dev.write(p32_be(0x2001))
-        # data
-        self.dev.write(data)
+        self.command(0x2001, payload=data)
 
     def write(self, data, size=1):
         if type(data) != bytes:
