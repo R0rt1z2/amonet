@@ -113,9 +113,9 @@ INSTALLER=$TMPDIR/install
 rm -rf $TMPDIR 2>/dev/null
 mkdir -p $INSTALLER 2>/dev/null
 
-check_product "karat" " - Amazon Fire TV Stick 4K 2nd Gen series - "
+check_product "sunstone" " - Amazon Fire Max 11 (2023) -"
 
-unzip -o "$ZIP" 'amonet/bin/twrp.img' 'amonet/bin/karat-kaeru.bin' -d $INSTALLER >&2
+unzip -o "$ZIP" 'amonet/bin/twrp.img' 'amonet/bin/sunstone-kaeru.bin' -d $INSTALLER >&2
 
 ui_print " "
 ui_print "amonet updater"
@@ -124,7 +124,7 @@ BIN=${INSTALLER}/amonet/bin
 
 ui_print "- Checking package"
 
-for f in twrp.img karat-kaeru.bin; do
+for f in twrp.img sunstone-kaeru.bin; do
   [ -s "${BIN}/$f" ] || abort "Missing or empty $f - bad or incomplete zip"
 done
 
@@ -135,7 +135,7 @@ done
 show_progress 1.0 0
 
 ui_print "- Updating kaeru"
-flash_part "kaeru" ${BIN}/karat-kaeru.bin lk_real
+flash_part "kaeru" ${BIN}/sunstone-kaeru.bin lk_real
 set_progress 0.50
 
 ui_print "- Updating TWRP"

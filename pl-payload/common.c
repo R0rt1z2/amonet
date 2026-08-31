@@ -1,8 +1,8 @@
 #include "common.h"
 
 void low_uart_put(int ch) {
-    volatile uint32_t *uart_reg0 = (volatile uint32_t*)0x11002414;
-    volatile uint32_t *uart_reg1 = (volatile uint32_t*)0x11002400;
+    volatile uint32_t *uart_reg0 = (volatile uint32_t*)0x11001114;
+    volatile uint32_t *uart_reg1 = (volatile uint32_t*)0x11001100;
 
     while ( !((*uart_reg0) & 0x20) )
     {}

@@ -13,6 +13,21 @@ DEVICE_TYPE_IDS = {
     "A2QCPPMSOLGVZE": "Fire Max 11 (2023)",
 }
 
+FIRMWARE = (
+    ("mcupm.img", "mcupm"),
+    ("spmfw.img", "spmfw"),
+    ("sspm.img", "sspm"),
+    ("dpm.img", "dpm"),
+    ("dtbo.img", "dtbo"),
+    ("apusys.img", "apusys"),
+    ("cam_vpu1.img", "cam_vpu1"),
+    ("cam_vpu2.img", "cam_vpu2"),
+    ("tz.img", "tee1"),
+    ("tz.img", "tee2"),
+)
+
+PAYLOAD = ("sunstone-kaeru.bin", "lk")
+
 def prepare(dev):
 
     if not dev.preloader:
@@ -70,32 +85,25 @@ def main(dev):
     if "fixgpt" in sys.argv[1:]:
         dev.emmc_switch(0)
         log("Flashing GPT")
-        flash_binary(dev, "../bin/gpt-karat.bin", 0, 34 * 0x200)
+        flash_binary(dev, "../bin/gpt-sunstone.bin", 0, 34 * 0x200)
 
     log("Check GPT")
     switch_user(dev)
 
     gpt = parse_gpt(dev)
-    for part in ("mcupm", "lk", "tee1", "tee2"):
+    for _, part in FIRMWARE + (PAYLOAD,):
         if part not in gpt:
             raise RuntimeError("bad gpt")
     find_misc(gpt)
 
-    log("Flash mcupm")
-    switch_user(dev)
-    flash_binary(dev, "../bin/mcupm.img", gpt["mcupm"][0], gpt["mcupm"][1] * 0x200)
+    for image, _ in FIRMWARE + (PAYLOAD,):
+        if not os.path.exists("../bin/" + image):
+            raise RuntimeError("missing ../bin/{}".format(image))
 
-    log("Flash payload")
-    switch_user(dev)
-    flash_binary(dev, "../bin/karat-kaeru.bin", gpt["lk"][0], gpt["lk"][1] * 0x200)
-
-    log("Flash tee1")
-    switch_user(dev)
-    flash_binary(dev, "../bin/tz.img", gpt["tee1"][0], gpt["tee1"][1] * 0x200)
-
-    log("Flash tee2")
-    switch_user(dev)
-    flash_binary(dev, "../bin/tz.img", gpt["tee2"][0], gpt["tee2"][1] * 0x200)
+    for image, part in FIRMWARE + (PAYLOAD,):
+        log("Flash {}".format(part))
+        switch_user(dev)
+        flash_binary(dev, "../bin/" + image, gpt[part][0], gpt[part][1] * 0x200)
 
     log("Force fastboot")
     force_fastboot(dev, gpt)

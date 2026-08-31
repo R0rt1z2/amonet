@@ -1,8 +1,6 @@
-# amonet-karat
+# amonet-sunstone
 
-This is an exploit for the Amazon Fire TV Stick 4K 2nd gen family of devices.
-
-This includes the Fire TV Stick 4K Max 2nd Gen, Fire TV Stick 4K 2nd Gen, and Fire TV Stick 4K Plus 2nd Gen.
+This is an exploit for the Amazon Fire Max 11 (2023).
 
 ## License
 

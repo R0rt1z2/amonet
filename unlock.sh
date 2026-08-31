@@ -12,7 +12,7 @@ die() {
 
 clear 2>/dev/null || printf '\033[2J\033[3J\033[H'
 
-printf '\033[1;35m%s\033[0m\n\n' "Amazon Fire TV Stick 4K 2nd Gen series unlock @ by R0rt1z2"
+printf '\033[1;35m%s\033[0m\n\n' "Amazon Fire Max 11 (2023) unlock @ by R0rt1z2"
 
 printf '\033[1;33m%s\033[0m\n' "This procedure carries a real chance of bricking the device."
 printf '\033[1;33m%s\033[0m\n\n' "You accept that risk, the developer takes no responsibility."

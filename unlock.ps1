@@ -8,7 +8,7 @@ function Die($msg) {
 
 Clear-Host
 
-Write-Host "Amazon Fire TV Stick 4K 2nd Gen series unlock @ by R0rt1z2" -ForegroundColor Magenta
+Write-Host "Amazon Fire Max 11 (2023) unlock @ by R0rt1z2" -ForegroundColor Magenta
 Write-Host ""
 
 Write-Host "This procedure carries a real chance of bricking the device." -ForegroundColor Yellow
