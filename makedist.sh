@@ -4,7 +4,7 @@ set -e
 
 cd "$(cd "$(dirname "$0")" && pwd)"
 
-VERSION="1.2.0"
+VERSION="1.0.0"
 DEVICE="sunstone"
 
 ZIP="amonet-${DEVICE}-v${VERSION}.zip"
