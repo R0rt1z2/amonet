@@ -11,7 +11,7 @@ def handshake2(dev, cmd='FACTFACT'):
 
 if __name__ == "__main__":
     if len(sys.argv) > 2:
-        dev = Device(sys.argv[2])
+        dev = Device(sys.argv[2], require_pwned=False)
     else:
         dev = Device()
         dev.find_device(True)

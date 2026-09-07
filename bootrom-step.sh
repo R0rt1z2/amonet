@@ -2,6 +2,4 @@
 
 set -e
 
-cd modules
-python3 main.py "$@"
-cd ..
+python3 "$(dirname "$0")/modules/main.py" "$@"

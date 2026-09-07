@@ -4,11 +4,15 @@ import glob
 import time
 
 import serial
+from serial.tools import list_ports
 
 from logger import log
 
 BAUD = 115200
 TIMEOUT = 5
+
+BLOCKS_PER_WRITE = 64
+BLOCKS_PER_READ = 64
 
 
 CRYPTO_BASE = 0x10210000 # for karnak
@@ -44,25 +48,71 @@ def serial_ports ():
     return result
 
 
+def port_info(port):
+    for info in list_ports.comports():
+        if info.device == port:
+            return info
+
+    return None
+
+
+def is_preloader(port):
+    info = port_info(port)
+
+    return info is not None and info.pid == 0x2000
+
+
+def stock_preloader(port):
+    info = port_info(port)
+
+    return info is not None and info.pid == 0x2000 and info.manufacturer != "PWNED"
+
+
 def p32_be(x):
     return struct.pack(">I", x)
 
 
 class Device:
 
-    def __init__(self, port=None):
+    def __init__(self, port=None, require_pwned=True):
         self.dev = None
+        self.pid = None
+        self.part = None
         if port:
+            self.detect_mode(port, require_pwned)
             self.dev = serial.Serial(port, BAUD, timeout=TIMEOUT)
+
+    @property
+    def preloader(self):
+        if self.pid == 0x2000:
+            return True
+        elif self.pid == 0x0003:
+            return False
+        else:
+            return None
+
+    def detect_mode(self, port, require_pwned=True):
+        info = port_info(port)
+        self.pid = info.pid if info else None
+
+        log("Found port = {}".format(port))
+
+        if self.preloader:
+            if require_pwned and info.manufacturer != "PWNED":
+                raise RuntimeError("Not in hacked USBDL mode")
+            log("Device is in preloader mode")
+        elif self.preloader is False:
+            log("Device is in bootrom mode")
+        else:
+            log("Unable to determine device mode")
+
+        return self.preloader
 
     def find_device(self,preloader=False):
         if self.dev:
             raise RuntimeError("Device already found")
 
-        if preloader:
-            log("Waiting for preloader")
-        else:
-            log("Waiting for bootrom")
+        log("Waiting for preloader" if preloader else "Waiting for device")
 
         old = serial_ports()
         while True:
@@ -71,6 +121,15 @@ class Device:
             # port added
             if new > old:
                 port = (new - old).pop()
+                if preloader:
+                    skip = not is_preloader(port)
+                else:
+                    skip = stock_preloader(port)
+
+                if skip:
+                    # log("Ignoring {}".format(port))
+                    old = new
+                    continue
                 break
             # port removed
             elif old > new:
@@ -78,7 +137,7 @@ class Device:
 
             time.sleep(0.25)
 
-        log("Found port = {}".format(port))
+        self.detect_mode(port, require_pwned = not preloader)
 
         self.dev = serial.Serial(port, BAUD, timeout=TIMEOUT)
 
@@ -166,6 +225,36 @@ class Device:
         if status_check:
             self.check(self.dev.read(2), b'\x00\x01') # status
 
+    def send_da(self, address, size, sig_len, da):
+        self.dev.write(b'\xd7')
+        self.check(self.dev.read(1), b'\xd7') # echo cmd
+
+        self.dev.write(struct.pack('>I', address))
+        self.check_int(self.dev.read(4), address) # echo address
+
+        self.dev.write(struct.pack('>I', size))
+        self.check_int(self.dev.read(4), size) # echo size
+
+        self.dev.write(struct.pack('>I', sig_len))
+        self.check_int(self.dev.read(4), sig_len) # echo sig_len
+
+        self.check(self.dev.read(2), b'\x00\x00') # arg check
+
+        self.dev.write(da)
+
+        self.dev.read(2) # checksum
+
+        self.check(self.dev.read(2), b'\x00\x00') # status
+
+    def jump_da(self, address):
+        self.dev.write(b'\xd5')
+        self.check(self.dev.read(1), b'\xd5') # echo cmd
+
+        self.dev.write(struct.pack('>I', address))
+        self.check_int(self.dev.read(4), address) # echo address
+
+        self.check(self.dev.read(2), b'\x00\x00') # status
+
     def run_ext_cmd(self, cmd):
         self.dev.write(b'\xC8')
         self.check(self.dev.read(1), b'\xC8') # echo cmd
@@ -180,70 +269,102 @@ class Device:
         if data != b"\xB1\xB2\xB3\xB4":
             raise RuntimeError("received {} instead of expected pattern".format(data))
 
+    def command(self, cmd, *args, payload=None):
+        packet = b"".join(p32_be(word) for word in (0xf00dd00d, cmd) + args)
+        if payload is not None:
+            packet += payload
+        self.dev.write(packet)
+
+    def read_exact(self, size):
+        data = bytearray()
+        while len(data) < size:
+            chunk = self.dev.read(size - len(data))
+            if not chunk:
+                raise RuntimeError("read fail (got {} of {} bytes)".format(len(data), size))
+            data += chunk
+        return bytes(data)
+
+    def expect_ack(self):
+        code = self.read_exact(4)
+        if code != b"\xd0\xd0\xd0\xd0":
+            raise RuntimeError("device failure")
+
     def emmc_read(self, idx):
-        # magic
-        self.dev.write(p32_be(0xf00dd00d))
-        # cmd
-        self.dev.write(p32_be(0x1000))
-        # block to read
-        self.dev.write(p32_be(idx))
+        self.command(0x1000, idx)
+        return self.read_exact(0x200)
 
-        data = self.dev.read(0x200)
-        if len(data) != 0x200:
-            raise RuntimeError("read fail")
+    def emmc_read_blocks(self, idx, blocks):
+        if blocks < 1 or blocks > BLOCKS_PER_READ:
+            raise RuntimeError("can only read 1 to {} blocks at a time".format(BLOCKS_PER_READ))
 
-        return data
+        self.command(0x1004, idx, blocks)
+        return self.read_exact(blocks * 0x200)
 
     def emmc_write(self, idx, data):
         if len(data) != 0x200:
             raise RuntimeError("data must be 0x200 bytes")
 
-        # magic
-        self.dev.write(p32_be(0xf00dd00d))
-        # cmd
-        self.dev.write(p32_be(0x1001))
-        # block to write
-        self.dev.write(p32_be(idx))
-        # data
-        self.dev.write(data)
+        if self.preloader and self.part == 1:
+            raise RuntimeError("refusing to write to boot0 in preloader mode")
 
-        code = self.dev.read(4)
-        if code != b"\xd0\xd0\xd0\xd0":
-            raise RuntimeError("device failure")
+        self.command(0x1001, idx, payload=data)
+        self.expect_ack()
+
+    def emmc_write_blocks(self, idx, data):
+        if len(data) % 0x200 != 0:
+            raise RuntimeError("data must be a whole number of blocks")
+
+        blocks = len(data) // 0x200
+        if blocks < 1 or blocks > BLOCKS_PER_WRITE:
+            raise RuntimeError("can only write 1 to {} blocks at a time".format(BLOCKS_PER_WRITE))
+
+        if self.preloader and self.part == 1:
+            raise RuntimeError("refusing to write to boot0 in preloader mode")
+
+        self.command(0x1003, idx, blocks, payload=data)
+        self.expect_ack()
 
     def emmc_switch(self, part):
-        # magic
-        self.dev.write(p32_be(0xf00dd00d))
-        # cmd
-        self.dev.write(p32_be(0x1002))
-        # partition
-        self.dev.write(p32_be(part))
+        self.command(0x1002, part)
+
+        self.part = part
+
+    def mem_read(self, address, size):
+        self.command(0x5000, address, size)
+
+        # the payload pads what it sends up to a whole number of words
+        return self.read_exact((size + 3) & ~3)[:size]
+
+    def try_fast_send(self):
+        expected = bytes((i * 7) & 0xFF for i in range(0x200))
+
+        self.command(0x5002)
+        try:
+            got = self.read_exact(len(expected))
+        except RuntimeError:
+            got = None
+
+        if got == expected:
+            return True
+
+        time.sleep(0.5)
+        self.dev.flushInput()
+        self.command(0x5003)
+        self.expect_ack()
+        return False
 
     def reboot(self):
-        # magic
-        self.dev.write(p32_be(0xf00dd00d))
-        # cmd
-        self.dev.write(p32_be(0x3000))        
+        self.command(0x3000)
+
+    def kick_watchdog(self):
+        self.command(0x3001)
 
     def rpmb_read(self):
-        # magic
-        self.dev.write(p32_be(0xf00dd00d))
-        # cmd
-        self.dev.write(p32_be(0x2000))
-
-        data = self.dev.read(0x100)
-        if len(data) != 0x100:
-            raise RuntimeError("read fail")
-
-        return data
+        self.command(0x2000)
+        return self.read_exact(0x100)
 
     def rpmb_write(self, data):
         if len(data) != 0x100:
             raise RuntimeError("data must be 0x100 bytes")
 
-        # magic
-        self.dev.write(p32_be(0xf00dd00d))
-        # cmd
-        self.dev.write(p32_be(0x2001))
-        # data
-        self.dev.write(data)
+        self.command(0x2001, payload=data)

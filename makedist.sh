@@ -9,7 +9,7 @@ mkdir -p dist/unlock/amonet/modules
 cp modules/{common.py,gpt.py,handshake.py,handshake2.py,load_payload.py,logger.py,main.py} dist/unlock/amonet/modules/
 
 mkdir -p dist/unlock/amonet/brom-payload/build
-cp brom-payload/build/payload.bin dist/unlock/amonet/brom-payload/build/
+cp brom-payload/build/{payload.bin,pl.bin} dist/unlock/amonet/brom-payload/build/
 
 cp {brick.sh,bootrom-step.sh,fastboot-step.sh,boot-fastboot.sh,boot-recovery.sh} dist/unlock/amonet/
 

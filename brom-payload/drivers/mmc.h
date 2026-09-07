@@ -492,11 +492,16 @@ struct mmc_core_rpmb_req {
 int mmc_init(struct msdc_host *host);
 int mmc_read(struct msdc_host *host, uint32_t blk, void *buf);
 int mmc_write(struct msdc_host *host, uint32_t blk, void *buf);
+int mmc_read_blocks(struct msdc_host *host, uint32_t blk, void *buf, uint32_t blocks);
+int mmc_write_blocks(struct msdc_host *host, uint32_t blk, void *buf, uint32_t blocks);
 int mmc_set_part(struct msdc_host *host, int part);
+int mmc_enable_8bit(struct msdc_host *host);
 int mmc_rpmb_read(struct msdc_host *host, void *buf);
 int mmc_rpmb_write(struct msdc_host *host, void *buf);
 void msdc_set_blknum(struct msdc_host *host, u32 blknum);
 int msdc_pio_read(struct msdc_host *host, void *buf);
 int msdc_pio_write(struct msdc_host* host, void *buf);
+int msdc_pio_read_multi(struct msdc_host* host, void *buf, u32 blocks);
+int msdc_pio_write_multi(struct msdc_host* host, void *buf, u32 blocks);
 
 #endif /* LINUX_MMC_MMC_H */

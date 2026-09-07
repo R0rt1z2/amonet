@@ -1,4 +1,6 @@
 import struct
+import time
+import threading
 
 from common import CRYPTO_BASE
 
@@ -75,11 +77,51 @@ def aes_write16(dev, addr, data):
         raise RuntimeError("failed to call the function!")
 
 
+class UserInputThread(threading.Thread):
+
+    def __init__(self, msg = "* * * If you have a short attached, remove it now * * *\n* * * Press Enter to continue * * *", *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.done = False
+        self.msg = msg
+
+    def run(self):
+        print("")
+        print(self.msg)
+        print("")
+        input()
+        self.done = True
+
+
+def read_payload(path):
+    with open(path, "rb") as fin:
+        payload = fin.read()
+    log("Load payload from {} = 0x{:X} bytes".format(path, len(payload)))
+    while len(payload) % 4 != 0:
+        payload += b"\x00"
+
+    return payload
+
+
+def load_pl_payload(dev, path):
+    payload = read_payload(path)
+
+    log("Send payload")
+    dev.send_da(0x40001000, len(payload), 0, payload)
+
+    log("Let's rock")
+    dev.jump_da(0x40001000)
+
+    log("Wait for the payload to come online...")
+    dev.wait_payload()
+    log("all good")
+
+
 def load_payload(dev, path):
-    print("")
-    print(" * * * Remove the short and press Enter * * * ")
-    print("")
-    input()
+    thread = UserInputThread()
+    thread.start()
+    while not thread.done:
+        dev.write32(0x10007008, 0x1971) # low-level watchdog kick
+        time.sleep(1)
 
     log("Init crypto engine")
     init(dev)
@@ -93,11 +135,7 @@ def load_payload(dev, path):
     log("Disable bootrom range checks")
     aes_write16(dev, 0x102868, bytes.fromhex("00000000000000000000000080000000"))
 
-    with open(path, "rb") as fin:
-        payload = fin.read()
-    log("Load payload from {} = 0x{:X} bytes".format(path, len(payload)))
-    while len(payload) % 4 != 0:
-        payload += b"\x00"
+    payload = read_payload(path)
 
     words = []
     for x in range(len(payload) // 4):

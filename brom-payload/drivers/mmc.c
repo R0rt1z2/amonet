@@ -5,6 +5,7 @@
 #include "mmc.h"
 #include "errno.h"
 #include "mt_sd.h"
+#include "timer.h"
 #include "../crypto/hmac-sha256.h"
 
 #define be32_to_cpup(addr) __builtin_bswap32(*(uint32_t*)addr)
@@ -13,7 +14,6 @@
 #define cpu_to_be32p be32_to_cpup
 
 unsigned int msdc_cmd(struct msdc_host *host, struct mmc_command *cmd);
-void sleepy(void);
 void hex_dump(const void* data, size_t size);
 
 int mmc_go_idle(struct msdc_host *host)
@@ -75,8 +75,7 @@ int mmc_send_op_cond(struct msdc_host *host, u32 ocr, u32 *rocr)
 
         err = -ETIMEDOUT;
 
-        // mmc_delay(10);
-        sleepy(); // TODO
+        mdelay(10);
     }
 
     if (rocr)
@@ -170,6 +169,66 @@ int mmc_write(struct msdc_host *host, uint32_t blk, void *buf)
         return err;
 
     return msdc_pio_write(host, buf);
+}
+
+int mmc_read_blocks(struct msdc_host *host, uint32_t blk, void *buf, uint32_t blocks)
+{
+    int err;
+    struct mmc_command sbc = { 0 };
+    struct mmc_command cmd = { 0 };
+
+    if (blocks <= 1)
+        return mmc_read(host, blk, buf);
+
+    sbc.opcode = MMC_SET_BLOCK_COUNT;
+    sbc.arg = blocks;
+    sbc.flags = MMC_RSP_R1 | MMC_CMD_AC;
+
+    err = msdc_cmd(host, &sbc);
+    if (err)
+        return err;
+
+    msdc_set_blknum(host, blocks);
+
+    cmd.opcode = MMC_READ_MULTIPLE_BLOCK;
+    cmd.arg = blk;
+    cmd.flags = MMC_RSP_R1 | MMC_CMD_ADTC;
+
+    err = msdc_cmd(host, &cmd);
+    if (err)
+        return err;
+
+    return msdc_pio_read_multi(host, buf, blocks);
+}
+
+int mmc_write_blocks(struct msdc_host *host, uint32_t blk, void *buf, uint32_t blocks)
+{
+    int err;
+    struct mmc_command sbc = { 0 };
+    struct mmc_command cmd = { 0 };
+
+    if (blocks <= 1)
+        return mmc_write(host, blk, buf);
+
+    sbc.opcode = MMC_SET_BLOCK_COUNT;
+    sbc.arg = blocks;
+    sbc.flags = MMC_RSP_R1 | MMC_CMD_AC;
+
+    err = msdc_cmd(host, &sbc);
+    if (err)
+        return err;
+
+    msdc_set_blknum(host, blocks);
+
+    cmd.opcode = MMC_WRITE_MULTIPLE_BLOCK;
+    cmd.arg = blk;
+    cmd.flags = MMC_RSP_R1 | MMC_CMD_ADTC;
+
+    err = msdc_cmd(host, &cmd);
+    if (err)
+        return err;
+
+    return msdc_pio_write_multi(host, buf, blocks);
 }
 
 int mmc_send_status(struct msdc_host *host, u32 *status)
@@ -336,6 +395,73 @@ int mmc_switch(struct msdc_host *host, u8 set, u8 index, u8 value,
 
 int mmc_set_part(struct msdc_host *host, int part) {
     return mmc_switch(host, EXT_CSD_CMD_SET_NORMAL, EXT_CSD_PART_CONFIG, 72 | part, 0);
+}
+
+#define BUS_VERIFY_BLOCKS 8
+
+static char bus_known[BUS_VERIFY_BLOCKS * 512];
+
+static int mmc_bus_verify(struct msdc_host *host)
+{
+    char block[512];
+
+    for (int i = 0; i < BUS_VERIFY_BLOCKS; i++) {
+        if (mmc_read(host, i, block) != 0)
+            return -1;
+        if (memcmp(block, bus_known + i * 512, sizeof(block)) != 0)
+            return -1;
+    }
+
+    return 0;
+}
+
+static int mmc_try_bus(struct msdc_host *host, int width, int ckdiv)
+{
+    u32 ext_csd = (width == 8) ? EXT_CSD_BUS_WIDTH_8 : EXT_CSD_BUS_WIDTH_4;
+    u32 sdc_cfg = (width == 8) ? 2 : 1;
+
+    if (mmc_switch(host, EXT_CSD_CMD_SET_NORMAL, EXT_CSD_BUS_WIDTH, ext_csd, 0) != 0)
+        return -1;
+
+    sdr_set_field(SDC_CFG, SDC_CFG_BUSWIDTH, sdc_cfg);
+    sdr_set_field(MSDC_CFG, MSDC_CFG_CKDIV, ckdiv);
+
+    mdelay(10);
+
+    if (mmc_bus_verify(host) == 0)
+        return 0;
+
+    sdr_set_field(MSDC_CFG, MSDC_CFG_CKDIV, 0);
+    sdr_set_field(SDC_CFG, SDC_CFG_BUSWIDTH, 0);
+
+    mmc_switch(host, EXT_CSD_CMD_SET_NORMAL, EXT_CSD_BUS_WIDTH,
+               EXT_CSD_BUS_WIDTH_1, 0);
+
+    mdelay(10);
+
+    return -1;
+}
+
+int mmc_enable_8bit(struct msdc_host *host) {
+    static const struct { int width; int ckdiv; } ladder[] = {
+        { 8, 0 }, { 8, 1 }, { 4, 0 }, { 4, 1 },
+    };
+
+    for (int i = 0; i < BUS_VERIFY_BLOCKS; i++) {
+        if (mmc_read(host, i, bus_known + i * 512) != 0)
+            return -1;
+    }
+
+    for (unsigned i = 0; i < sizeof(ladder) / sizeof(ladder[0]); i++) {
+        if (mmc_try_bus(host, ladder[i].width, ladder[i].ckdiv) == 0) {
+            printf("bus is now %d bit, ckdiv %d\n", ladder[i].width, ladder[i].ckdiv);
+            return 0;
+        }
+    }
+
+    printf("card refused a wider bus, staying on 1 bit\n");
+
+    return -1;
 }
 
 int mmc_rpmb_partition_ops(struct mmc_core_rpmb_req *rpmb_req, struct msdc_host *host)
@@ -1001,9 +1127,9 @@ int mmc_init(struct msdc_host *host) {
     host->blksz = 0x200;
 
     sdr_set_bits(MSDC_CFG, MSDC_CFG_PIO);
-    sleepy();
+    mdelay(10);
     sdr_write32(MSDC_CFG, sdr_read32(MSDC_CFG) | 0x1000);
-    sleepy();
+    mdelay(10);
     printf("MSDC_CFG: 0x%08X\n", sdr_read32(MSDC_CFG));
 
     ret = mmc_go_idle(host);
