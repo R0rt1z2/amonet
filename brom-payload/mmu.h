@@ -3,6 +3,9 @@
 
 #include <inttypes.h>
 
-uint32_t mmu_enable(void);
+#define MMU_SRAM_CACHED   0
+#define MMU_SRAM_UNCACHED 1
+
+uint32_t mmu_enable(int sram_uncached);
 
 #endif

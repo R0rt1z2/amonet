@@ -26,7 +26,7 @@ int main() {
 
     mmc_enable_8bit(&host);
 
-    printf("SCTLR = 0x%08X\n", mmu_enable());
+    printf("SCTLR = 0x%08X\n", mmu_enable(MMU_SRAM_CACHED));
 
     command_loop(&host);
 }

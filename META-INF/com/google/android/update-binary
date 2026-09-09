@@ -1,18 +1,182 @@
 #!/sbin/sh -x
-# amonet updater for biscuit (Amazon Echo Dot 2nd Gen)
-# Copyright (C) 2020-2026 k4y0z and R0rt1z2
+# amonet updater
+# Copyright (C) 2019 k4y0z @ xda-developers
+# Copyright (C) 2025 Roger Ortiz (R0rt1z2)
 
-PAYLOAD_BLOCK=223207
-BYNAME=/dev/block/platform/mtk-msdc.0/by-name
+BY_NAME_DIRS="
+/dev/block/by-name
+/dev/block/platform/soc/11230000.mmc/by-name
+/dev/block/platform/mtk-msdc.0/by-name
+/dev/block/platform/soc/by-name
+/dev/block/platform/*/by-name
+/dev/block/platform/*/*/by-name
+"
 
+# detect whether in boot mode
 getprop | grep zygote | grep -q running && bootMode=true || bootMode=false
 
+# Default permissions
 umask 022
+
+##########################################################################################
+# Functions
+##########################################################################################
 
 ui_print() {
   $bootMode && echo -e "$1" || echo -e "ui_print $1\nui_print" >> /proc/self/fd/$outFD
 }
 
+show_progress() {
+  $bootMode || echo -e "progress $1 $2" >> /proc/self/fd/$outFD
+}
+
+set_progress() {
+  $bootMode || echo -e "set_progress $1" >> /proc/self/fd/$outFD
+}
+
+abort() {
+  ui_print " "
+  ui_print "(!) $1"
+  ui_print " "
+  exit 1
+}
+
+flash_file() {
+  [ -f "$2" ] || abort "Missing $(basename "$2") - bad or incomplete zip"
+  dd if="$2" of="$3" || abort "Failed to write $1"
+}
+
+find_by_name() {
+  for _name in "$@"; do
+    for _dir in $BY_NAME_DIRS; do
+      if [ -b "$_dir/$_name" ]; then
+        echo "$_dir/$_name"
+        return 0
+      fi
+    done
+  done
+
+  return 1
+}
+
+find_by_number() {
+  for _name in "$@"; do
+    _num=$(part_num "$_name")
+    if [ -n "$_num" ] && [ -b "${DISK}p${_num}" ]; then
+      echo "${DISK}p${_num}"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+find_part() {
+  if [ "$GPT_RESTORED" = "1" ]; then
+    find_by_number "$@" || find_by_name "$@"
+  else
+    find_by_name "$@" || find_by_number "$@"
+  fi
+}
+
+disk_of() {
+  case "$1" in
+    /dev/block/mmcblk*p[0-9]*) echo "${1%p[0-9]*}" ;;
+    /dev/block/mmcblk*) echo "$1" ;;
+    *[0-9]) echo "$1" | sed 's/[0-9][0-9]*$//' ;;
+    *) echo "$1" ;;
+  esac
+}
+
+flash_part() {
+  _label="$1"
+  _src="$2"
+  shift 2
+  [ -f "$_src" ] || abort "Missing $(basename "$_src") - bad or incomplete zip"
+  _node=$(find_part "$@") || abort "Could not find the $1 partition"
+  dd if="$_src" of="$_node" || abort "Failed to write $_label"
+}
+
+wipe_part() {
+  _label="$1"
+  shift
+  _node=$(find_part "$@")
+  if [ -z "$_node" ] || [ ! -b "$_node" ]; then
+    ui_print "  (!) no $_label partition found, skipping"
+    return 0
+  fi
+  _size=$(blockdev --getsize64 "$_node" 2>/dev/null)
+  case "$_size" in ''|*[!0-9]*) _size=0 ;; esac
+  if [ "$_size" -gt 0 ]; then
+    dd if=/dev/zero of="$_node" bs=512 count=$((_size / 512)) 2>/dev/null
+  else
+    dd if=/dev/zero of="$_node" 2>/dev/null
+  fi
+  return 0
+}
+
+part_num() {
+  sgdisk --print $DISK | awk -v n="$1" '$NF == n { print $1 }'
+}
+
+part_field() {
+  sgdisk --info="$1" $DISK | sed -n "s/^$2: *//p" | tr -d "'"
+}
+
+restore_gpt() {
+  sgdisk --print $DISK >/dev/null 2>&1 || abort "sgdisk cannot read $DISK"
+  [ -n "$(part_num userdata)" ] || abort "Could not read the partition table on $DISK"
+
+  BOOT_A_X=$(part_num boot_a_x)
+  BOOT_B_X=$(part_num boot_b_x)
+
+  [ -z "$BOOT_A_X" ] && [ -z "$BOOT_B_X" ] && return 0
+
+  ui_print "- restoring partition table"
+
+  # with boot_a_x and boot_b_x present, boot_a and boot_b are the two
+  # partitions amonet appended after userdata, not the originals
+  BOOT_A=$(part_num boot_a)
+  BOOT_B=$(part_num boot_b)
+  USERDATA=$(part_num userdata)
+
+  UD_START=$(part_field $USERDATA "First sector" | cut -d' ' -f1)
+  UD_TYPE=$(part_field $USERDATA "Partition GUID code" | cut -d' ' -f1)
+  UD_GUID=$(part_field $USERDATA "Partition unique GUID")
+  LAST=$(sgdisk --print $DISK | sed -n 's/.*last usable sector is *\([0-9]*\).*/\1/p')
+
+  if [ -z "$UD_START" ] || [ -z "$UD_TYPE" ] || [ -z "$UD_GUID" ] || [ -z "$LAST" ]; then
+    ui_print "(!) could not read the partition table, leaving it alone"
+    return 1
+  fi
+
+  for p in $BOOT_B $BOOT_A; do
+    [ -n "$p" ] && sgdisk --delete=$p $DISK >/dev/null
+  done
+
+  sgdisk --delete=$USERDATA \
+         --new=$USERDATA:$UD_START:$LAST \
+         --typecode=$USERDATA:$UD_TYPE \
+         --partition-guid=$USERDATA:$UD_GUID \
+         --change-name=$USERDATA:userdata $DISK >/dev/null
+
+  [ -n "$BOOT_A_X" ] && sgdisk --change-name=$BOOT_A_X:boot_a $DISK >/dev/null
+  [ -n "$BOOT_B_X" ] && sgdisk --change-name=$BOOT_B_X:boot_b $DISK >/dev/null
+
+  if [ -n "$(part_num boot_a_x)" ] || [ -n "$(part_num boot_b_x)" ]; then
+    ui_print "(!) partition table is still modified"
+    return 1
+  fi
+
+  sgdisk --verify $DISK >/dev/null || ui_print "(!) sgdisk is unhappy with the result"
+
+  GPT_RESTORED=1
+  blockdev --rereadpt $DISK 2>/dev/null
+  sleep 1
+  ui_print "- partition table restored"
+}
+
+# not a function, but must be here
 if $bootMode; then
   ui_print " "
   ui_print "(!) Boot mode install is not supported"
@@ -31,12 +195,18 @@ grep_prop() {
 
 check_product() {
   product=$(grep_prop ro.build.product)
+
   if [ "$product" != "${1}" ] ; then
     ui_print "This is only for the \"${1}\"${2}, your device is a \"${product}\""
     exit 1
   fi
 }
 
+##########################################################################################
+# Flashable update-binary preparation
+##########################################################################################
+
+# set SELinux mode to "permissive"
 setenforce 0
 
 outFD=$2
@@ -45,15 +215,16 @@ ZIP="$3"
 readlink /proc/$$/fd/$outFD 2>/dev/null | grep /tmp >/dev/null
 if [ "$?" -eq "0" ]; then
   outFD=0
+
   for FD in `ls /proc/$$/fd`; do
-    readlink /proc/$$/fd/$FD 2>/dev/null | grep pipe >/dev/null
+  readlink /proc/$$/fd/$FD 2>/dev/null | grep pipe >/dev/null
+  if [ "$?" -eq "0" ]; then
+    ps | grep " 3 $FD " | grep -v grep >/dev/null
     if [ "$?" -eq "0" ]; then
-      ps | grep " 3 $FD " | grep -v grep >/dev/null
-      if [ "$?" -eq "0" ]; then
-        outFD=$FD
-        break
-      fi
+    outFD=$FD
+    break
     fi
+  fi
   done
 fi
 
@@ -62,90 +233,73 @@ check_product "biscuit" " - Amazon Echo Dot 2nd Gen (2016) - "
 TMPDIR=/dev/tmp
 INSTALLER=$TMPDIR/install
 
+# initial cleanup
 rm -rf $TMPDIR 2>/dev/null
 mkdir -p $INSTALLER 2>/dev/null
 
-unzip -o "$ZIP" 'amonet/bin/twrp.img' 'amonet/bin/boot.hdr' 'amonet/bin/boot.payload' -d $INSTALLER >&2
+unzip -o "$ZIP" 'amonet/bin/preloader.img' 'amonet/bin/lk.bin' 'amonet/bin/tz.img' 'amonet/bin/tee-payload.bin' 'amonet/bin/biscuit-kaeru.bin' 'amonet/bin/twrp.img' -d $INSTALLER >&2
+
+##########################################################################################
+# Main
+##########################################################################################
+
+BIN=${INSTALLER}/amonet/bin
+DISK=$(disk_of "$(readlink -f "$(find_part userdata)")")
 
 ui_print " "
-ui_print "amonet updater for biscuit"
+ui_print "amonet updater"
+ui_print "- Checking package"
 
-BOOT_A_AMONET=${BYNAME}/boot_a_amonet
-BOOT_B_AMONET=${BYNAME}/boot_b_amonet
+for f in preloader.img lk.bin tz.img tee-payload.bin biscuit-kaeru.bin twrp.img; do
+  [ -s "${BIN}/$f" ] || abort "Missing or empty $f - bad or incomplete zip"
+done
 
-fix_symlinks() {
-  if [ -e "$BOOT_A_AMONET" ] && [ -e "$BOOT_B_AMONET" ]; then
-    REAL_A=$(readlink -f "$BOOT_A_AMONET")
-    REAL_B=$(readlink -f "$BOOT_B_AMONET")
-    if [ -b "$REAL_A" ] && [ -b "$REAL_B" ]; then
-      return 0
-    fi
-  fi
+[ -b "$DISK" ] || abort "Could not find the eMMC device"
+[ -b /dev/block/mmcblk0boot0 ] || abort "Could not find mmcblk0boot0"
+[ -e /sys/block/mmcblk0boot0/force_ro ] || abort "Could not find the boot0 force_ro switch"
 
-  ui_print "(!) boot_b_amonet symlink is broken, attempting to fix"
+show_progress 1.0 0
 
-  REAL_A=$(readlink -f "$BOOT_A_AMONET" 2>/dev/null)
-  if [ ! -b "$REAL_A" ]; then
-    ui_print "(!) boot_a_amonet is also broken, cannot continue"
-    return 1
-  fi
+restore_gpt
+set_progress 0.15
 
-  SKIP="$REAL_A"
-  for name in system_a system_b userdata cache misc persist \
-              tee1 tee1_real tee2 tee2_real \
-              lk_a lk_a_real lk_b lk_b_real; do
-    resolved=$(readlink -f "${BYNAME}/${name}" 2>/dev/null)
-    [ -b "$resolved" ] && SKIP="$SKIP $resolved"
-  done
+for p in lk_a lk_b tee1 tee2 expdb recovery; do
+  find_part "${p}_real" "$p" >/dev/null || abort "Could not find the $p partition"
+done
 
-  SIZE_A=$(blockdev --getsize64 "$REAL_A" 2>/dev/null)
-  THRESHOLD=$((SIZE_A / 10))
-  SIZE_MIN=$((SIZE_A - THRESHOLD))
-  SIZE_MAX=$((SIZE_A + THRESHOLD))
+ui_print "- Updating preloader"
+echo 0 > /sys/block/mmcblk0boot0/force_ro
+flash_file "preloader" ${BIN}/preloader.img /dev/block/mmcblk0boot0
+echo 1 > /sys/block/mmcblk0boot0/force_ro
+set_progress 0.30
 
-  REAL_B=""
-  for part in /dev/block/mmcblk0p*; do
-    case "$SKIP" in
-      *"$part"*) continue ;;
-    esac
-    SIZE_P=$(blockdev --getsize64 "$part" 2>/dev/null)
-    [ -z "$SIZE_P" ] && continue
-    [ "$SIZE_P" -lt "$SIZE_MIN" ] && continue
-    [ "$SIZE_P" -gt "$SIZE_MAX" ] && continue
-    if tail -c 10485760 "$part" 2>/dev/null | grep -qa "This is LK-payload by xyz."; then
-      REAL_B="$part"
-      break
-    fi
-  done
+ui_print "- Updating lk"
+flash_part "lk_a" ${BIN}/lk.bin lk_a_real lk_a
+flash_part "lk_b" ${BIN}/lk.bin lk_b_real lk_b
+set_progress 0.45
 
-  if [ -z "$REAL_B" ]; then
-    ui_print "(!) Could not find boot_b partition with LK-payload signature"
-    return 1
-  fi
+ui_print "- Updating tz"
+flash_part "tz" ${BIN}/tz.img tee2_real tee2
+set_progress 0.60
 
-  rm -f "$BOOT_B_AMONET"
-  ln -s "$REAL_B" "$BOOT_B_AMONET"
+ui_print "- Updating payload"
+flash_part "payload" ${BIN}/tee-payload.bin tee1_real tee1
+flash_part "kaeru" ${BIN}/biscuit-kaeru.bin expdb
+set_progress 0.75
 
-  ui_print "  boot_b_amonet -> $REAL_B"
-  return 0
-}
+ui_print "- Updating TWRP"
+flash_part "TWRP" ${BIN}/twrp.img recovery
+set_progress 0.90
 
-if ! fix_symlinks; then
-  ui_print "(!) Failed to resolve boot partitions"
-  exit 1
-fi
+wipe_part "misc" misc MISC
+set_progress 1.00
 
-ui_print "- updating recovery"
-dd if=${INSTALLER}/amonet/bin/twrp.img of=${BYNAME}/recovery
+sync
 
-ui_print "- updating boot_a"
-dd if=${INSTALLER}/amonet/bin/boot.hdr of=${BOOT_A_AMONET} bs=512
-dd if=${INSTALLER}/amonet/bin/boot.payload of=${BOOT_A_AMONET} bs=512 seek=${PAYLOAD_BLOCK}
-
-ui_print "- updating boot_b"
-dd if=${INSTALLER}/amonet/bin/boot.hdr of=${BOOT_B_AMONET} bs=512
-dd if=${INSTALLER}/amonet/bin/boot.payload of=${BOOT_B_AMONET} bs=512 seek=${PAYLOAD_BLOCK}
-
-ui_print "- Update complete"
 ui_print " "
+ui_print "- Done, device will reboot to recovery in 5s"
+sleep 5
+
+reboot recovery
+
 exit 0

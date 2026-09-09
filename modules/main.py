@@ -7,7 +7,7 @@ from common import BLOCKS_PER_READ, BLOCKS_PER_WRITE, Device
 from handshake import handshake
 from load_payload import load_payload, load_pl_payload, UserInputThread
 from logger import log
-from gpt import parse_gpt_compat, generate_gpt, modify_step1, modify_step2, parse_gpt as gpt_parse_gpt
+from gpt import parse_gpt_compat, generate_gpt, unpatch, parse_gpt as gpt_parse_gpt
 
 def check_brom(dev):
     devinfo = struct.unpack("<I", dev.mem_read(0x10206060, 4))[0]
@@ -114,25 +114,10 @@ def dump_binary(dev, path, start_block, max_size=0):
 
 def force_fastboot(dev, gpt):
     switch_user(dev)
-    block = list(dev.emmc_read(gpt["expdb"][0]))
+    block = list(dev.emmc_read(gpt["misc"][0]))
     block[0:16] = "FASTBOOT_PLEASE\x00".encode("utf-8")
-    dev.emmc_write(gpt["expdb"][0], bytes(block))
-    block = dev.emmc_read(gpt["expdb"][0])
-
-def reset_bcb(dev, gpt):
-    switch_user(dev)
-    block = bytearray(dev.emmc_read(gpt["misc"][0] + 1))
-    bcb_start = 0x160
-    block[bcb_start:bcb_start+7] = b'\x00\x41\x42\x42\x01\x8f\x00'
-    dev.emmc_write(gpt["misc"][0] + 1, bytes(block))
-
-#NOTE: This doesn't actually wipe userdata, it just erases the first 10 blocks.
-#      A new filesystem should be created at next boot.
-def wipe_userdata(dev, gpt):
-    switch_user(dev)
-    block = b"\x00" * 0x200
-    for x in range(0, 10):
-        dev.emmc_write(gpt["userdata"][0] + x, block)
+    dev.emmc_write(gpt["misc"][0], bytes(block))
+    block = dev.emmc_read(gpt["misc"][0])
 
 def switch_user(dev):
     dev.emmc_switch(0)
@@ -228,25 +213,22 @@ def main(dev):
         # reboot
         dev.reboot()
 
-    # 2) Sanity check GPT
+    # 1) Sanity check GPT
     log("Check GPT")
     switch_user(dev)
 
-    # 2.1) Parse gpt
+    # 1.1) Parse gpt
     gpt, gpt_header, part_list = parse_gpt(dev)
-    if "lk_a" not in gpt or "tee1" not in gpt or "boot_a" not in gpt or "recovery" not in gpt:
-        raise RuntimeError("bad gpt")
+    for part in ("lk_a", "lk_b", "tee1", "tee2", "expdb", "misc", "recovery"):
+        if part not in gpt:
+            raise RuntimeError("bad gpt, missing {}".format(part))
 
-    if "boot_a_x" not in gpt or "boot_b_x" not in gpt:
-        log("Modify GPT")
+    # 1.2) Undo the partition table an older amonet patched in
+    if "boot_a_x" in gpt or "boot_b_x" in gpt:
+        log("Restore GPT")
 
-        if "boot_a_tmp" not in gpt and "boot_b_tmp" not in gpt:
-            part_list_mod1 = modify_step1(part_list)
-        else:
-            part_list_mod1 = part_list
-
-        part_list_mod2 = modify_step2(part_list_mod1)
-        primary, backup = generate_gpt(gpt_header, part_list_mod2)
+        part_list_restored = unpatch(gpt_header, part_list)
+        primary, backup = generate_gpt(gpt_header, part_list_restored)
 
         log("Validate GPT")
         gpt_header, part_list = gpt_parse_gpt(bytes(primary))
@@ -258,23 +240,20 @@ def main(dev):
         flash_data(dev, backup, gpt_header['last_lba'] + 1)
 
         gpt, gpt_header, part_list = parse_gpt(dev)
-        if "boot_a_x" not in gpt or "boot_b_x" not in gpt:
+        if "boot_a_x" in gpt or "boot_b_x" in gpt:
             raise RuntimeError("bad gpt")
 
-        log("Wipe userdata")
-        wipe_userdata(dev, gpt)
-
-    # 3) Sanity check boot0
+    # 2) Sanity check boot0
     log("Check boot0")
     switch_boot0(dev)
 
-    # 4) Sanity check rpmb
+    # 3) Sanity check rpmb
     log("Check rpmb")
     rpmb = dev.rpmb_read()
     if rpmb[0:4] != b"AMZN":
         warn_and_continue(dev, "rpmb looks broken (i.e. you're retrying the exploit)")
 
-    # 5) Zero out rpmb to enable downgrade
+    # 4) Zero out rpmb to enable downgrade
     log("Downgrade rpmb")
     dev.rpmb_write(b"\x00" * 0x100)
     log("Recheck rpmb")
@@ -285,33 +264,26 @@ def main(dev):
     log("rpmb downgrade ok")
     dev.kick_watchdog()
 
-    # 6) Flash microloader
-    log("Inject payload")
+    # 5) Flash original tee to tee2
+    log("Flash tee2")
     switch_user(dev)
-    flash_binary(dev, "../bin/boot.hdr", gpt["boot_a"][0], gpt["boot_a"][1] * 0x200)
-    flash_binary(dev, "../bin/boot.payload", gpt["boot_a"][0] + 223207, (gpt["boot_a"][1] * 0x200) - (223207 * 0x200))
+    flash_binary(dev, "../bin/tz.img", gpt["tee2"][0], gpt["tee2"][1] * 0x200)
 
-    switch_user(dev)
-    flash_binary(dev, "../bin/boot.hdr", gpt["boot_b"][0], gpt["boot_b"][1] * 0x200)
-    flash_binary(dev, "../bin/boot.payload", gpt["boot_b"][0] + 223207, (gpt["boot_b"][1] * 0x200) - (223207 * 0x200))
-
-    if len(sys.argv) == 2 and sys.argv[1] == "payload":
-        log("Reboot")
-        return dev.reboot()
-
-    # 7) Downgrade tz
-    log("Flash tz")
-    switch_user(dev)
-    flash_binary(dev, "../bin/tz.img", gpt["tee1"][0], gpt["tee1"][1] * 0x200)
-
-    # 8) Downgrade lk
+    # 6) Flash original lk to both slots
     log("Flash lk")
     switch_user(dev)
     flash_binary(dev, "../bin/lk.bin", gpt["lk_a"][0], gpt["lk_a"][1] * 0x200)
     flash_binary(dev, "../bin/lk.bin", gpt["lk_b"][0], gpt["lk_b"][1] * 0x200)
 
-    log("Force fastboot")
-    force_fastboot(dev, gpt)
+    # 7) Flash kaeru
+    log("Flash kaeru")
+    switch_user(dev)
+    flash_binary(dev, "../bin/biscuit-kaeru.bin", gpt["expdb"][0], gpt["expdb"][1] * 0x200)
+
+    # 8) Flash tee w/ payload to tee1
+    log("Flash payload")
+    switch_user(dev)
+    flash_binary(dev, "../bin/tee-payload.bin", gpt["tee1"][0], gpt["tee1"][1] * 0x200)
 
     # 9) Downgrade preloader
     if dev.preloader:
@@ -321,7 +293,16 @@ def main(dev):
         switch_boot0(dev)
         flash_binary(dev, "../bin/preloader.img", 0)
 
-    # 10) Reboot (to fastboot)
+    # 10) Force fastboot
+    log("Force fastboot")
+    force_fastboot(dev, gpt)
+
+    # 11) Wait some time so data is flushed to eMMC
+    for _ in range(5):
+        dev.kick_watchdog()
+        time.sleep(1)
+
+    # 12) Reboot (to fastboot)
     log("Reboot to unlocked fastboot")
     dev.reboot()
 
@@ -335,8 +316,8 @@ if __name__ == "__main__":
         args[2] = os.path.abspath(args[2])
         if args[0] == "flash" and not os.path.exists(args[2]):
             raise RuntimeError("no such file: {}".format(args[2]))
-    elif args and args not in (["fixgpt"], ["payload"]):
-        raise RuntimeError("unknown command: {} (have: flash <partition> <file>, read <partition> <file>, fixgpt, payload)".format(args[0]))
+    elif args and args != ["fixgpt"]:
+        raise RuntimeError("unknown command: {} (have: flash <partition> <file>, read <partition> <file>, fixgpt)".format(args[0]))
 
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
 

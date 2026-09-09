@@ -12,6 +12,7 @@
 #define DESC_B          (1 << 2)
 
 #define DESC_NORMAL     (DESC_SECTION | DESC_AP_RW | DESC_SHAREABLE | DESC_TEX_WB | DESC_C | DESC_B)
+#define DESC_NORMAL_NC  (DESC_SECTION | DESC_AP_RW | DESC_SHAREABLE | DESC_TEX_WB)
 #define DESC_DEVICE     (DESC_SECTION | DESC_AP_RW | DESC_SHAREABLE | DESC_XN | DESC_B)
 
 #define TTBR0_ATTRS     0x4A
@@ -59,13 +60,16 @@ static void dcache_invalidate_all(void) {
     __asm__ volatile ("dsb" ::: "memory");
 }
 
-uint32_t mmu_enable(void) {
+uint32_t mmu_enable(int sram_uncached) {
+    uint32_t sram_desc = sram_uncached ? DESC_NORMAL_NC : DESC_NORMAL;
     uint32_t sctlr;
 
     for (uint32_t i = 0; i < SECTION_COUNT; i++) {
         uint32_t base = i * SECTION_SIZE;
 
-        if (base < SRAM_LIMIT || base >= DRAM_BASE)
+        if (base < SRAM_LIMIT)
+            page_table[i] = base | sram_desc;
+        else if (base >= DRAM_BASE)
             page_table[i] = base | DESC_NORMAL;
         else
             page_table[i] = base | DESC_DEVICE;

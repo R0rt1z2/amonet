@@ -157,7 +157,7 @@ int main() {
 
     msdc_init(0, 2);
 
-    printf("SCTLR = 0x%08X\n", mmu_enable());
+    printf("SCTLR = 0x%08X\n", mmu_enable(MMU_SRAM_UNCACHED));
 
     command_loop(&host);
 }
