@@ -24,7 +24,7 @@ if (-not (Test-Path $ProfilePath)) {
 . $ProfilePath
 
 $DeviceMap = @{
-    "BISCUIT" = "Echo Dot 2nd Generation - 2016"
+    "RADAR" = "Echo 2nd Generation - 2017"
 }
 
 function Run-Fastboot($arguments, $timeoutSeconds = 0) {

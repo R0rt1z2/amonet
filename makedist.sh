@@ -2,9 +2,9 @@
 
 set -e
 
-VERSION=2.0.0
+VERSION=1.0.0
 
-DEVICE=biscuit
+DEVICE=radar
 ZIP_NAME=amonet-${DEVICE}-v${VERSION}.zip
 
 for f in preloader.img lk.bin tz.img tee-payload.bin ${DEVICE}-kaeru.bin twrp.img; do

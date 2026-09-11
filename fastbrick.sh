@@ -30,7 +30,7 @@ else
 fi
 
 declare -A DEVICE_MAP
-DEVICE_MAP["BISCUIT"]="Echo Dot 2nd Generation - 2016"
+DEVICE_MAP["RADAR"]="Echo 2nd Generation - 2017"
 
 if [ -t 1 ] && command -v tput >/dev/null 2>&1 && tput colors >/dev/null 2>&1 && [ $(tput colors) -ge 8 ]; then
     RED='\033[31m'

@@ -523,7 +523,7 @@ int main() {
     uint32_t *patch32;
 
     printf("This is LK-payload by xyz. Copyright 2019\n");
-    printf("64-Bit version for biscuit by k4y0z and R0rt1z2. Copyright 2020-2026\n");
+    printf("64-Bit version for radar by k4y0z and R0rt1z2. Copyright 2020-2026\n");
     printf("Version: %s, built on %s at %s\n", AMONET_VERSION, __DATE__, __TIME__);
 
     parse_gpt();

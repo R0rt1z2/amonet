@@ -228,7 +228,7 @@ if [ "$?" -eq "0" ]; then
   done
 fi
 
-check_product "biscuit" " - Amazon Echo Dot 2nd Gen (2016) - "
+check_product "radar" " - Amazon Echo 2nd Gen (2017) - "
 
 TMPDIR=/dev/tmp
 INSTALLER=$TMPDIR/install
@@ -237,7 +237,7 @@ INSTALLER=$TMPDIR/install
 rm -rf $TMPDIR 2>/dev/null
 mkdir -p $INSTALLER 2>/dev/null
 
-unzip -o "$ZIP" 'amonet/bin/preloader.img' 'amonet/bin/lk.bin' 'amonet/bin/tz.img' 'amonet/bin/tee-payload.bin' 'amonet/bin/biscuit-kaeru.bin' 'amonet/bin/twrp.img' -d $INSTALLER >&2
+unzip -o "$ZIP" 'amonet/bin/preloader.img' 'amonet/bin/lk.bin' 'amonet/bin/tz.img' 'amonet/bin/tee-payload.bin' 'amonet/bin/radar-kaeru.bin' 'amonet/bin/twrp.img' -d $INSTALLER >&2
 
 ##########################################################################################
 # Main
@@ -250,7 +250,7 @@ ui_print " "
 ui_print "amonet updater"
 ui_print "- Checking package"
 
-for f in preloader.img lk.bin tz.img tee-payload.bin biscuit-kaeru.bin twrp.img; do
+for f in preloader.img lk.bin tz.img tee-payload.bin radar-kaeru.bin twrp.img; do
   [ -s "${BIN}/$f" ] || abort "Missing or empty $f - bad or incomplete zip"
 done
 
@@ -284,7 +284,7 @@ set_progress 0.60
 
 ui_print "- Updating payload"
 flash_part "payload" ${BIN}/tee-payload.bin tee1_real tee1
-flash_part "kaeru" ${BIN}/biscuit-kaeru.bin expdb
+flash_part "kaeru" ${BIN}/radar-kaeru.bin expdb
 set_progress 0.75
 
 ui_print "- Updating TWRP"

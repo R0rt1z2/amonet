@@ -209,7 +209,7 @@ def main(dev):
     if len(sys.argv) == 2 and sys.argv[1] == "fixgpt":
         dev.emmc_switch(0)
         log("Flashing GPT")
-        flash_binary(dev, "../bin/gpt-biscuit.bin", 0, 34 * 0x200)
+        flash_binary(dev, "../bin/gpt-radar.bin", 0, 34 * 0x200)
         # reboot
         dev.reboot()
 
@@ -278,7 +278,7 @@ def main(dev):
     # 7) Flash kaeru
     log("Flash kaeru")
     switch_user(dev)
-    flash_binary(dev, "../bin/biscuit-kaeru.bin", gpt["expdb"][0], gpt["expdb"][1] * 0x200)
+    flash_binary(dev, "../bin/radar-kaeru.bin", gpt["expdb"][0], gpt["expdb"][1] * 0x200)
 
     # 8) Flash tee w/ payload to tee1
     log("Flash payload")
@@ -286,9 +286,7 @@ def main(dev):
     flash_binary(dev, "../bin/tee-payload.bin", gpt["tee1"][0], gpt["tee1"][1] * 0x200)
 
     # 9) Downgrade preloader
-    if dev.preloader:
-        log("Running from the preloader, leaving the one in BOOT0 alone")
-    else:
+    if not dev.preloader:
         log("Flash preloader")
         switch_boot0(dev)
         flash_binary(dev, "../bin/preloader.img", 0)
